@@ -4,14 +4,14 @@
 
 <head>
 
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="generator" content="pandoc" />
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 
-<meta name="date" content="2017-03-27" />
+<meta name="date" content="2017-04-26" />
 
 <title>hmi: hierarchical multiple imputation</title>
 
@@ -71,34 +71,34 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <h4 class="author"><em>Matthias Speidel</em></h4>
 <h4 class="author"><em>Jörg Drechsler</em></h4>
 <h4 class="author"><em>Shahab Jolani</em></h4>
-<h4 class="date"><em>2017-03-27</em></h4>
+<h4 class="date"><em>2017-04-26</em></h4>
 
 
 
 <div id="purpose-of-package" class="section level2">
 <h2>Purpose of package</h2>
-<p>The hmi package allows user to run single level and multilevel imputation models. The big additional benefit of this package is the user-friendliness. It is designed for researchers, experienced in running single und multilevel analysis models, but not in writing own multilevel imputation routines.</p>
+<p>The hmi package allows the user to run single level and multilevel imputation models. The big additional benefit of this package is the user-friendliness. It is designed for researchers, experienced in running single und multilevel analysis models, but not in writing own multilevel imputation routines.</p>
 <p>The user just has to pass the data to the main function and, optionally, his analysis model. Basically the package then translates this analysis model into commands to impute the data according to it with functions from <code>mice</code>, <code>MCMCglmm</code> or routines build for this package.</p>
 </div>
 <div id="basic-functionality" class="section level2">
 <h2>Basic functionality</h2>
 <p>The main function that wraps up all sub functions is <code>hmi</code>.</p>
-<p>In the most simple case, the user just passes his <code>data</code> to <code>hmi</code>. In this case all variables with missing values are imputed based on a single level imputation model including the other variables. The situation, for which the package was build for, is that the user additionally passes his analysis model as <code>model_formula</code> to <code>hmi</code> (and defines more details if he wants to). The function then analyses the <code>model_formula</code>, checks whether it suits to the data given and runs some other checks on the data given (size of the data, number of remaining observations etc.).</p>
+<p>In the most simple case, the user just passes his <code>data</code> to <code>hmi</code>. In this case all variables with missing values are imputed based on a single level imputation model including the other variables. The situation, for which the package was built for, is that the user additionally passes his analysis model as <code>model_formula</code> to <code>hmi</code> (and defines more details if he wants to). The function then analyzes the <code>model_formula</code>, checks whether it suits to the data given and runs some other checks on the data given (size of the data, number of remaining observations etc.).</p>
 <div id="sequential-regression-imputation" class="section level3">
 <h3>Sequential regression imputation</h3>
-<p>Principally there are two strategies to impute missing data. One is the <em>joint modeling</em> approach. It assumes a joint distribution of the variables and draws values based on this distribution. For this package we see this approach not to be suitable and therefor choose the <em>sequential regression</em> approach. It imputes variables step by step until convergence.</p>
+<p>Principally there are two strategies to impute missing data. One is the <em>joint modeling</em> approach. It assumes a joint distribution of the variables and draws values based on this distribution. For this package we see this approach not to be suitable and therefore choose the <em>sequential regression</em> approach. It imputes variables step by step until convergence.</p>
 <p>As a starting point, all variables with missing values are imputed by samples of observed values in this variable. After this is done, <code>hmi</code> starts with the actual, adequate imputation: the first variable with missing values is selected and imputed based on the other variables with an imputation model congenial to the <code>model_formula</code>. Dependent on the situation this can either be a single level or a multilevel model. As different classes of variables require different classes of imputation routines, <code>hmi</code> also determines which type the variable is of (continuous, binary etc. all supported types are listed below).</p>
-<p>Then the next incomplete variable is imputed based on this firstly imputed variable and the other (yet only sample-imputed) variables. Then the third, forth, … incomplete variable is imputed. The process of imputing all incomplete variables once is called a <em>cycle</em>. Now, a next cycle can begin, imputing the first variable again, but this time based on the other variables which now (once) have been imputed adequately. After <code>maxit</code> cycles, the current state of the variables is stored, building one imputation. Then the process starts again, until <code>M</code> imputed data sets are present.</p>
+<p>Then the next incomplete variable is imputed based on this firstly imputed variable and the other (yet only sample-imputed) variables. Then the third, fourth, … incomplete variable is imputed. The process of imputing all incomplete variables once is called a <em>cycle</em>. Now, a next cycle can begin, imputing the first variable again, but this time based on the other variables which now (once) have been imputed adequately. After <code>maxit</code> cycles, the current state of the variables is stored, building one imputation. Then the process starts again, until <code>M</code> imputed data sets are present.</p>
 </div>
 <div id="output-of-hmi" class="section level3">
 <h3>Output of <code>hmi</code></h3>
-<p>The package is build to be compatible with <code>mice</code>; especially with regard the output. <code>hmi</code> returns, like <code>mice</code>, a so called <code>mids</code>-object (multiple imputed data set).</p>
-<p>This allows user, familiar with <code>mice</code> to use functions designed for <code>mice</code>-outputs without switching barriers. For example, running the generic <code>plot()</code>-function on a <code>mids</code>-object calls the function <code>plot.mids</code> showing the means and variances of the imputed variables over the different imputations, regardless whether the <code>mids</code>-object came from <code>mice</code> or <code>hmi</code>. Or he could call the <code>complete</code>-function delivered by <code>mice</code> to get a completed data set where the NAs are replaced by the imputed values.</p>
+<p>The package is build to be compatible with <code>mice</code>; especially with regard the output. <code>hmi</code> returns, like <code>mice</code>, a so-called <code>mids</code>-object (multiply imputed data set).</p>
+<p>This allows the user, familiar with <code>mice</code> to use functions designed for <code>mice</code>-outputs without switching barriers. For example, running the generic <code>plot()</code>-function on a <code>mids</code>-object calls the function <code>plot.mids</code> showing the means and variances of the imputed variables over the different imputations, regardless whether the <code>mids</code>-object came from <code>mice</code> or <code>hmi</code>. Or he could call the <code>complete</code>-function delivered by <code>mice</code> to get a completed data set where the NAs are replaced by the imputed values.</p>
 </div>
 </div>
 <div id="the-different-types-of-imputation-routines-the-supported-types-of-variables" class="section level2">
 <h2>The different types of imputation routines / the supported types of variables</h2>
-<p>Different variable types require different imputation routines. For example for binary variables it would be unpleasant to imputed other values than <code>0</code> and <code>1</code>. And factor variables with levels <code>&quot;A&quot;</code>, <code>&quot;B&quot;</code> and <code>&quot;C&quot;</code> need an imputation routine different to the ones for binary and continuous variables.</p>
+<p>Different variable types require different imputation routines. For example for binary variables it would be unpleasant to impute other values than <code>0</code> and <code>1</code>. And factor variables with levels <code>&quot;A&quot;</code>, <code>&quot;B&quot;</code> and <code>&quot;C&quot;</code> need an imputation routine different to the ones for binary and continuous variables.</p>
 <p>To determine which imputation routine shall be used, we first have to decide whether a single level or multilevel model shall be used. This decision is mainly based on the <code>model_formula</code> given by the user. The formula is decomposed into its fixed effects, random effects and cluster variable parts (if present). If the cluster variable and the random effect variables are actually present in the data set and available in the moment of imputation, a multilevel model is run. In all other cases (i.e. not available or not specified) a single level model is run.</p>
 <p>The second question is which type the variable is of. We distinguish eight different types of variable. The next sections describe how we assign a type to a variable and how the imputation model works for these types. For some special cases the rules of assignment might give unwanted results. Therefore the user can specify the types of the variables in advance by setting up a <code>list_of_types</code>. Section <em>Pre-definition of the variable types</em> explains how this is done.</p>
 <p><code>MCMCglmm</code> assumes for each type of variable, that there is a latent variable <span class="math inline">\(l\)</span> present which can be expressed by fix and random effects. So <span class="math inline">\(l = X \cdot \beta + Z \cdot u + \varepsilon\)</span> <span class="citation">(cf. Hadfield 2010 eq. 3)</span>. The probability of observing <span class="math inline">\(y_i\)</span> is conditioned on <span class="math inline">\(l_i\)</span>: <span class="math inline">\(f_i(y_i|l_i)\)</span>, with <span class="math inline">\(f_i\)</span> being the probability density function (pdf) for <span class="math inline">\(y_i\)</span>. More about the theory behind <code>MCMCglmm</code> can be found in the below.</p>
@@ -108,7 +108,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>Data are considered to be binary if there are only two unique values. This includes for example <code>0</code> and <code>1</code> or <code>&quot;m&quot;</code> and <code>&quot;f&quot;</code>.</p>
 <p>The single level imputation model is a logistic regression for a binomial family with a logit link. Based on this model new (Bayesian) imputation parameters are drawn. Those parameters are then used to sample binary observations, given the other covariates. This is implemented in the <code>mice.impute.logreg</code>-function which is called when running <code>mice</code> with the <code>method = &quot;logreg&quot;</code>.</p>
 <p>In the multilevel model <code>MCMCglmm</code> is called with <code>family = categorical</code>. This uses the pdf <span class="math inline">\(\exp(l)/(1+\exp(l))\)</span></p>
-<p>Settings where our rule of classification might fail are small data, or data with very few observed individuals or if a third possible category is unobserved. E.g. in a small health survey it could happen that non of the respondents reported to have had two (or more) Bypass operations. So here a count variable would falsely be classified as binary.</p>
+<p>Settings where our rule of classification might fail are small data, or data with very few observed individuals or if a third possible category is unobserved. E.g. in a small health survey it could happen that none of the respondents reported having had two (or more) Bypass operations. So here a count variable would falsely be classified as binary.</p>
 </div>
 <div id="continuous-variables-keyword-cont" class="section level3">
 <h3>continuous variables (keyword <code>&quot;cont&quot;</code>)</h3>
@@ -118,7 +118,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 </div>
 <div id="semicontinuous-variables-keyword-semicont" class="section level3">
 <h3>semicontinuous variables (keyword <code>&quot;semicont&quot;</code>)</h3>
-<p>As “semicontinuous” we define continuous variable with more than 5% values being 0.</p>
+<p>A continuous variable with more than 5% values being 0, is defined being “semicontinuous”.</p>
 <p>The first step of imputing semicontinuous variables is to temporarily change internally all non-zero values to 1. Then via a binary imputation (based on the temporarily 0/1 variable) it is decided for the missing values whether they shall be 0 or non-zero.</p>
 <p>In a third step, for those being chosen to be non-zero, we run a continuous imputation model based on the originally non-zero observations. (Missing values, chosen to be 0, don’t need further treatment, their imputation values is just 0).</p>
 </div>
@@ -126,21 +126,21 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <h3>rounded continuous variables (keyword <code>&quot;roundedcont&quot;</code>)</h3>
 <p>If more than 50% of the data are divisible by 5, they are considered to be “rounded continous”. For example the income in surveys is often reported rounded by the respondents.</p>
 <p>For this type of variable, we use our own imputation routine.</p>
-<p>It estimates a model for the rounding degree G and for the variable Y itself, then parameters for the joint distribution of G and Y are drawn and afterwards used to impute values. Not only missing values get a new imputed value, but also values with an interval response (e.g. “between 1500 and 2000”) and (presumably) rounded responses.</p>
-<p>Individuals with NAs get imputed values drawn from the normal distribution with the estimated parameters from the joint distribution. Interval responses get imputed values drawn from the truncated normal distribution. For individuals with (presumably) rounded responses, values are drawn for G and Y and than checked whether this combination could explain the actual observed value of Y for this observation. E.g. if 2950 is observed then the combination (G = degree 100, Y = 3000) would not fit to the observed response. In the case of a mismatch, the process is repeated until G and Y match.</p>
+<p>It estimates a model for the rounding degree G and for the variable Y itself, then parameters for the joint distribution of G and Y are drawn and afterward used to impute values. Not only missing values get a new imputed value, but also values with an interval response (e.g. “between 1500 and 2000”) and (presumably) rounded responses.</p>
+<p>Individuals with NAs get imputed values drawn from the normal distribution with the estimated parameters from the joint distribution. Interval responses get imputed values drawn from the truncated normal distribution. For individuals with (presumably) rounded responses, values are drawn for G and Y and then checked whether this combination could explain the actual observed value of Y for this observation. E.g. if 2950 is observed then the combination (G = degree 100, Y = 3000) would not fit to the observed response. In the case of a mismatch, the process is repeated until G and Y match.</p>
 <p>The process is described in detail in <span class="citation">(Drechsler, Kiesl, and Speidel 2015)</span>.</p>
 </div>
 <div id="interval-variables-keyword-interval" class="section level3">
 <h3>interval variables (keyword <code>&quot;interval&quot;</code>)</h3>
-<p>We see interval data as a special case of imprecise observations given as an mathematical interval <span class="math inline">\([l;~u]\)</span> with <span class="math inline">\(l \leq u\)</span>. For example a person could report refuse to report its precise income <span class="math inline">\(y\)</span>, but is willing to report that it is something between 1500 and 2000. In this case the interval <span class="math inline">\([1500; ~2000]\)</span> is the observed value for this individual. Precise answers like <span class="math inline">\(3217\)</span> can be seen as special cases of interval data where <span class="math inline">\(l=u\)</span>, here <span class="math inline">\([3217;~3217]\)</span>. Missing values can be seen as the extreme case <span class="math inline">\([-\infty;~\infty]\)</span>.</p>
-<p>To our knowledge, there is no standard in R for interval data. One possibility would be to generate <em>two</em> variables for the lower and the upper bounds of the data. Based on this approach <span class="citation">(Wiencierz 2012)</span> set up the <code>idf</code>-objects (interval data frame) in her package <code>linLIR</code>. We didn’t follow this approach for our package, because it would need an inconvenient workflow to link both variables appriopriately. Instead we define a new class <code>interval</code> for interval variables. Interval variables actually come in <em>one</em> variable. Technically one observation in such an interval variable is <code>&quot;l;u&quot;</code> with <code>l</code> (resp. <code>u</code>) being a scalar with optional decimal places in American notation (with a full stop. E.g. <code>&quot;1234.56;3000&quot;</code>) or <code>-Inf</code> (resp. <code>Inf</code>).</p>
-<p>Within most <code>R</code> functions such a <code>interval</code>-variable will be treated as a factor. But it is a factor with maybe more then 100 categories. So we suggest not to use such a variable as covariate in a imputation model. Within <code>hmi</code> it would not be used as this would be too many categories. The main reason to use a <code>interval</code> variable is to impute this variable according to <span class="citation">(Drechsler, Kiesl, and Speidel 2015)</span>.</p>
+<p>We see interval data as a special case of imprecise observations given as a mathematical interval <span class="math inline">\([l;~u]\)</span> with <span class="math inline">\(l \leq u\)</span>. For example a person could refuse to report its precise income <span class="math inline">\(y\)</span>, but is willing to report that it is something between 1500 and 2000. In this case the interval <span class="math inline">\([1500; ~2000]\)</span> is the observed value for this individual. Precise answers like <span class="math inline">\(3217\)</span> can be seen as special cases of interval data where <span class="math inline">\(l=u\)</span>, here <span class="math inline">\([3217;~3217]\)</span>. Missing values can be seen as the extreme case <span class="math inline">\([-\infty;~\infty]\)</span>.</p>
+<p>To our knowledge, there is no standard in R for interval data. One possibility would be to generate <em>two</em> variables for the lower and the upper bounds of the data. Based on this approach <span class="citation">(Wiencierz 2012)</span> set up the <code>idf</code>-objects (interval data frame) in her package <code>linLIR</code>. We didn’t follow this approach for our package because it would need an inconvenient workflow to link both variables appropriately. Instead, we define a new class <code>interval</code> for interval variables. Interval variables actually come in <em>one</em> variable. Technically one observation in such an interval variable is <code>&quot;l;u&quot;</code> with <code>l</code> (resp. <code>u</code>) being a scalar with optional decimal places in American notation (with a full stop. E.g. <code>&quot;1234.56;3000&quot;</code>) or <code>-Inf</code> (resp. <code>Inf</code>).</p>
+<p>Within most <code>R</code> functions such an <code>interval</code>-variable will be treated as a factor. But it is a factor with maybe more than 100 categories. So we suggest not to use such a variable as covariate in a imputation model. Within <code>hmi</code> it would not be used as this would be too many categories. The main reason to use an <code>interval</code> variable is to impute this variable according to <span class="citation">(Drechsler, Kiesl, and Speidel 2015)</span>.</p>
 <p>We also implemented functions to run basic calculations on interval data (<code>+</code>, <code>-</code>, ’*’ and <code>/</code>), to generate interval data based on two vectors (<code>as_interval</code>) or to split interval data up into their lower and upper bounds (<code>split_interval</code>).</p>
-<p>Furthermore we want to encourage people working with interval data or variables and hope that a standard for this will emerge. For this reason we think, users should be able to switch easily between <code>idf</code> and <code>interval</code> objects as one might be better for one task and the other for a different task. So we implemented <code>idf2interval</code> and <code>interval2idf</code> which conveys an object from one format to the other (as far as possible).</p>
+<p>Furthermore, we want to encourage people working with interval data or variables and hope that a standard for this will emerge. For this reason we think, users should be able to switch easily between <code>idf</code> and <code>interval</code> objects as one might be better for one task and the other for a different task. So we implemented <code>idf2interval</code> and <code>interval2idf</code> which conveys an object from one format to the other (as far as possible).</p>
 </div>
 <div id="count-variables-keyword-count" class="section level3">
 <h3>count variables (keyword <code>&quot;count&quot;</code>)</h3>
-<p>Every vector with integers (which is not semicontinous) is considered to be count data. By this definition, every continuous variable, rounded to the next integer is considered to be a count variable.</p>
+<p>Every vector with integers (which is not semicontinuous) is considered to be count data. By this definition, every continuous variable, rounded to the next integer is considered to be a count variable.</p>
 <p>For both, single level and multilevel settings, we use <code>MCMCglmm</code> with the poisson distribution for the latent variable.</p>
 </div>
 <div id="categorical-variables-keyword-categorical" class="section level3">
@@ -157,17 +157,17 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 </div>
 <div id="intercept-variable-keyword-intercept" class="section level3">
 <h3>Intercept variable (keyword <code>&quot;intercept&quot;</code>)</h3>
-<p>A constant variable (only one kind of observation) is considered to be a intercept variable. If you run a analysis model with a intercept variable (even if it is only implicit like in <code>y ~ x1 + x2</code>), your data set needs to have such an intercept variable. <code>hmi</code> is quite strict here and different to what you might expect.</p>
+<p>A constant variable (only one kind of observation) is considered to be a intercept variable. If you run an analysis model with an intercept variable (even if it is only implicit like in <code>y ~ x1 + x2</code>), your data set needs to have such an intercept variable. <code>hmi</code> is quite strict here and different to what you might expect.</p>
 </div>
 </div>
 <div id="pre-definition-of-the-variable-types" class="section level2">
 <h2>pre-definition of the variable types</h2>
-<p>If you want to have manual control over the process which method is used for each variable, you can specify a <code>list_of_types</code>. This is a <code>list</code> where each list element has the name of a variable in the data frame. The elements has to contain a single character string denoting the type of the variable (the keywords from the previous section). With the function <code>list_of_types_maker</code>, the user can get the framework for this object.</p>
+<p>If you want to have manual control over the process which method is used for each variable, you can specify a <code>list_of_types</code>. This is a <code>list</code> where each list element has the name of a variable in the data frame. The elements have to contain a single character string denoting the type of the variable (the keywords from the previous section). With the function <code>list_of_types_maker</code>, the user can get the framework for this object.</p>
 <p>In most scenarios this is shouldn’t be necessary. One example where it might be necessary is when only two observations of a continuous variable are left - because in this case <code>get_type</code> interpret this variable to be binary. Or if you want to impute rounded continuous variables not as <code>&quot;count&quot;</code>, but as <code>&quot;cont&quot;</code>.</p>
-<p>The example uses the data set <code>CO2</code> about the “Carbon Dioxide Uptake in Grass Plants”, which comes along with <code>R</code>. If you run the common <code>str(CO2)</code>, you get the information that the variable <code>Plant</code> is an <code>Ord.factor w/ 12 levels</code>, <code>Type</code> is an <code>Factor w/ 2 levels</code>, <code>Treatment</code> is an <code>Factor w/ 2 levels</code>, <code>conc</code> is a <code>num</code> and so is <code>uptake</code>.</p>
-<p><code>hmi</code> draws similar conclusions. A difference would be that we call Factors with 2 levels “binary”. Also the variable <code>conc</code> would be considered to be a special case of a continuous variable - a rounded continuous, because every value of the ambient carbon dioxide concentration is divisible by at least 5.</p>
+<p>The example uses the data set <code>CO2</code> about the “Carbon Dioxide Uptake in Grass Plants”, which comes along with <code>R</code>. If you run the common <code>str(CO2)</code>, you get the information that the variable <code>Plant</code> is an <code>Ord.factor w/ 12 levels</code>, <code>Type</code> is a <code>Factor w/ 2 levels</code>, <code>Treatment</code> is a <code>Factor w/ 2 levels</code>, <code>conc</code> is a <code>num</code> and so is <code>uptake</code>.</p>
+<p><code>hmi</code> draws similar conclusions. A difference would be that we call Factors with 2 levels “binary”. Also the variable <code>conc</code> would be considered to be a special case of a continuous variable - a rounded continuous because every value of the ambient carbon dioxide concentration is divisible by at least 5.</p>
 <p>You can see in advance how variables will be treated internally by <code>hmi</code> if you call the <code>list_of_types_maker</code>. For example <code>example_list_of_types &lt;- list_of_types_maker(CO2)</code> gives you the following list: <!--
-source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-02-21.R')
+source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-04-20.R')
 example_list_of_types <- list_of_types_maker(CO2)
 example_list_of_types
 --></p>
@@ -209,7 +209,7 @@ example_list_of_types
 </div>
 <div id="r" class="section level3">
 <h3><span class="math inline">\(R\)</span></h3>
-<p>For the residuals in most cases, we use non-informative, but improper priors be setting <code>V = 1e-07</code> and <code>nu = -2</code>. In some cases, like logistic models, we have to fix the residual variance at <code>1</code>.</p>
+<p>For the residuals in most cases, we use non-informative, but improper priors by setting <code>V = 1e-07</code> and <code>nu = -2</code>. In some cases, like logistic models, we have to fix the residual variance at <code>1</code>.</p>
 </div>
 </div>
 <div id="how-to-use-it" class="section level2">
@@ -217,10 +217,10 @@ example_list_of_types
 <div id="single-level-example" class="section level3">
 <h3>single level example</h3>
 <p>To illustrate the use of <code>hmi</code>, we stick to the <code>CO2</code> data set; but as it has no missing values, we add those artificially:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">example &lt;-<span class="st"> </span>CO2
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ex &lt;-<span class="st"> </span>CO2
 <span class="kw">set.seed</span>(<span class="dv">1</span>)
-example[<span class="kw">sample</span>(<span class="dv">1</span><span class="op">:</span><span class="kw">nrow</span>(CO2), <span class="dt">size =</span> <span class="dv">20</span>), <span class="st">&quot;uptake&quot;</span>] &lt;-<span class="st"> </span><span class="ot">NA</span>
-<span class="kw">head</span>(example) <span class="co"># e.g. in line 5 there is a NA now.</span></code></pre></div>
+ex[<span class="kw">sample</span>(<span class="dv">1</span><span class="op">:</span><span class="kw">nrow</span>(CO2), <span class="dt">size =</span> <span class="dv">20</span>), <span class="st">&quot;uptake&quot;</span>] &lt;-<span class="st"> </span><span class="ot">NA</span>
+<span class="kw">head</span>(ex) <span class="co"># e.g. in line 5 there is a NA now.</span></code></pre></div>
 <pre><code>##   Plant   Type  Treatment conc uptake
 ## 1   Qn1 Quebec nonchilled   95   16.0
 ## 2   Qn1 Quebec nonchilled  175   30.4
@@ -230,30 +230,30 @@ example[<span class="kw">sample</span>(<span class="dv">1</span><span class="op"
 ## 6   Qn1 Quebec nonchilled  675   39.2</code></pre>
 <p>The most simple call of <code>hmi</code> would be be:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(<span class="st">&quot;hmi&quot;</span>)
-result &lt;-<span class="st"> </span><span class="kw">hmi</span>(example)</code></pre></div>
+result &lt;-<span class="st"> </span><span class="kw">hmi</span>(ex)</code></pre></div>
 <p><code>result</code> is a <code>mids</code> (<em>multiple imputed data set</em>) object as it also is returned by <code>mice</code>. So the functionality of mice can be used. For example the arithmetic mean and standard deviation of the imputation values across the <code>M</code> imputations can be plotted. Here we have 10 different lines for each of the 10 imputations (in <code>hmi</code> the default value is <code>M = 10</code>). And each line consists of 5 points for each of the 5 iterations (in <code>hmi</code> the default value is <code>maxit = 5</code>).</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(<span class="st">&quot;hmi&quot;</span>)
 <span class="kw">set.seed</span>(<span class="dv">1</span>)
-result &lt;-<span class="st"> </span><span class="kw">hmi</span>(example)</code></pre></div>
+result &lt;-<span class="st"> </span><span class="kw">hmi</span>(ex)</code></pre></div>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot</span>(result, <span class="dt">layout =</span> <span class="kw">c</span>(<span class="dv">2</span>, <span class="dv">1</span>))</code></pre></div>
 <!-- The plots show no extreme results to cause worries. -->
 <p>Another useful tool from <code>mice</code> is the <code>complete</code> function. It gives you a data set with the original and imputed values. Here we show the first rows of the completed data set:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">head</span>(<span class="kw">complete</span>(result, <span class="dv">1</span>))</code></pre></div>
 <pre><code>## Grouped Data: uptake ~ conc | Plant
-##   Plant   Type  Treatment conc   uptake
-## 1   Qn1 Quebec nonchilled   95 16.00000
-## 2   Qn1 Quebec nonchilled  175 30.40000
-## 3   Qn1 Quebec nonchilled  250 34.80000
-## 4   Qn1 Quebec nonchilled  350 37.20000
-## 5   Qn1 Quebec nonchilled  500 33.04667
-## 6   Qn1 Quebec nonchilled  675 39.20000</code></pre>
+##   Plant   Type  Treatment conc  uptake
+## 1   Qn1 Quebec nonchilled   95 16.0000
+## 2   Qn1 Quebec nonchilled  175 30.4000
+## 3   Qn1 Quebec nonchilled  250 34.8000
+## 4   Qn1 Quebec nonchilled  350 37.2000
+## 5   Qn1 Quebec nonchilled  500 20.1881
+## 6   Qn1 Quebec nonchilled  675 39.2000</code></pre>
 </div>
 <div id="multilevel-example" class="section level3">
 <h3>multilevel example</h3>
 <p>Let’s move to a more elaborated imputation than just calling <code>hmi(example)</code>. A big part of the packages contribution is the multilevel imputation. For example, if your interest lies in modeling the effect of the carbon dioxide uptake rates (target variable <code>uptake</code>) by the ambient carbon dioxide concentration (explanatory variable <code>conc</code>) - and an intercept. Assuming that the effects of <code>conc</code> and the intercept on <code>uptake</code> can differ across the different plants (random effect variable <code>Plant</code>), your analysis model using <code>lmer</code> from the <code>lme4</code> package would be <code>lmer(uptake ~ 1 + conc + (1 + conc | Plant), data = example)</code>. Just for clarification how this model is read by <code>hmi</code>: the word left to <code>~</code> denotes the target variable, the parts right to <code>~</code> denote the fixed and random effects variables and the cluster ID. And in more detail, the parts within the parentheses left to <code>|</code> denote the random effects variables and the word right to <code>|</code> denotes the cluster ID.</p>
 <p>If you run this model, you will get results but also a warning about convergence:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(<span class="st">&quot;lme4&quot;</span>)
-<span class="kw">lmer</span>(uptake <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">|</span><span class="st"> </span>Plant), <span class="dt">data =</span> example)</code></pre></div>
+<span class="kw">lmer</span>(uptake <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">|</span><span class="st"> </span>Plant), <span class="dt">data =</span> ex)</code></pre></div>
 <pre><code>## Warning in checkConv(attr(opt, &quot;derivs&quot;), opt$par, ctrl = control
 ## $checkConv, : Model failed to converge with max|grad| = 0.00680642 (tol =
 ## 0.002, component 1)</code></pre>
@@ -261,7 +261,7 @@ result &lt;-<span class="st"> </span><span class="kw">hmi</span>(example)</code>
 ##  - Rescale variables?</code></pre>
 <pre><code>## Linear mixed model fit by REML ['lmerMod']
 ## Formula: uptake ~ 1 + conc + (1 + conc | Plant)
-##    Data: example
+##    Data: ex
 ## REML criterion at convergence: 445.469
 ## Random effects:
 ##  Groups   Name        Std.Dev. Corr
@@ -275,9 +275,9 @@ result &lt;-<span class="st"> </span><span class="kw">hmi</span>(example)</code>
 ## convergence code 0; 2 optimizer warnings; 0 lme4 warnings</code></pre>
 <p>As <code>lmer</code> suggests to rescale variables, we will rescale <code>conc</code>.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(<span class="st">&quot;lme4&quot;</span>)
-example_<span class="dv">2</span> &lt;-<span class="st"> </span>example
-example_<span class="dv">2</span><span class="op">$</span>conc &lt;-<span class="st"> </span>(example_<span class="dv">2</span><span class="op">$</span>conc <span class="op">-</span><span class="st"> </span><span class="kw">mean</span>(example_<span class="dv">2</span><span class="op">$</span>conc))<span class="op">/</span><span class="kw">sd</span>(example_<span class="dv">2</span><span class="op">$</span>conc)
-mod &lt;-<span class="st"> </span><span class="kw">lmer</span>(uptake <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">|</span><span class="st"> </span>Plant), <span class="dt">data =</span> example_<span class="dv">2</span>)</code></pre></div>
+ex_<span class="dv">2</span> &lt;-<span class="st"> </span>ex
+ex_<span class="dv">2</span><span class="op">$</span>conc &lt;-<span class="st"> </span>(ex_<span class="dv">2</span><span class="op">$</span>conc <span class="op">-</span><span class="st"> </span><span class="kw">mean</span>(ex_<span class="dv">2</span><span class="op">$</span>conc))<span class="op">/</span><span class="kw">sd</span>(ex_<span class="dv">2</span><span class="op">$</span>conc)
+mod &lt;-<span class="st"> </span><span class="kw">lmer</span>(uptake <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">|</span><span class="st"> </span>Plant), <span class="dt">data =</span> ex_<span class="dv">2</span>)</code></pre></div>
 <p>The coefficients can be interpreted as follows:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">fixef</span>(mod)</code></pre></div>
 <pre><code>## (Intercept)        conc 
@@ -290,11 +290,13 @@ mod &lt;-<span class="st"> </span><span class="kw">lmer</span>(uptake <span clas
 ## (Intercept)    5.023051 1.500895
 ## conc           1.500895 1.184934</code></pre>
 <p>It shows moderate variances and positively correlated (<span class="math inline">\(\rho = 0.615\)</span>) random effects. So plants with a higher “baseline uptake” have (on average) also a higher concetration effect.</p>
-<p>If we would run again <code>hmi(example_2)</code> without further specification, we would end up in running a single level imputation. To make <code>hmi</code> run a multilevel imputation model, you have to specify a multilevel analysis model and this has two mandatory elements: 1. variables with a clusterspecific effect (<em>random effects variables</em>) and 2. a variable indicating the clusters. By passing your analysis model formula to <code>hmi</code> you implicitly specify your imputation model(s). If there are more variables with missing values, then the other variables are tried to be imputed with a similar model. This means that maybe only one covariate in the analysis model becomes the target variable in the imputation model, but the random effects variables and the cluster ID keep the same (except in the case a random effects variable is to be imputed. In this case this variable is dropped from the random effects part of the imputation model). So here a multilevel imputation would be set up by</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span class="dt">data =</span> example_<span class="dv">2</span>, <span class="dt">model_formula =</span> uptake <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">|</span><span class="st"> </span>Plant))</code></pre></div>
+<p>If we would run again <code>hmi(example_2)</code> without further specification, we would end up in running a single level imputation. To make <code>hmi</code> run a multilevel imputation model, you have to specify a multilevel analysis model and this has two mandatory elements: 1. variables with a clusterspecific effect (<em>random effects variables</em>) and 2. a variable indicating the clusters. By passing your analysis model formula to <code>hmi</code> you implicitly specify your imputation model(s). If there are more variables with missing values, then the other variables are tried to be imputed with a similar model. This means that maybe only one covariate in the analysis model becomes the target variable in the imputation model, but the random effects variables and the cluster ID keep the same (except in the case a random effects variable is to be imputed. In this case this variable is dropped from the random effects part of the imputation model). So here a multilevel imputation would be set up by (as we have only one variable to impute, we can set maxit to 1):</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">set.seed</span>(<span class="dv">1</span>)
+result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span class="dt">data =</span> ex_<span class="dv">2</span>, <span class="dt">model_formula =</span> uptake <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">|</span><span class="st"> </span>Plant), <span class="dt">maxit =</span> <span class="dv">1</span>)</code></pre></div>
 <p>Here we get the message that “Intercept” was not found in the data and we can decide whether we want to stop the imputation routine or continue with a single level imputation. The reason for this message is the strict control in <code>hmi</code> whether your model and your data fit together. So if you are sure that you want to have a intercept variable in your model, include one into your data.</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">example_<span class="dv">2</span><span class="op">$</span>Intercept &lt;-<span class="st"> </span><span class="dv">1</span>
-result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span class="dt">data =</span> example_<span class="dv">2</span>, <span class="dt">model_formula =</span> uptake <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">|</span>Plant))</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ex_<span class="dv">2</span><span class="op">$</span>Intercept &lt;-<span class="st"> </span><span class="dv">1</span>
+<span class="kw">set.seed</span>(<span class="dv">1</span>)
+result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span class="dt">data =</span> ex_<span class="dv">2</span>, <span class="dt">model_formula =</span> uptake <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>conc <span class="op">|</span>Plant), <span class="dt">maxit =</span> <span class="dv">1</span>)</code></pre></div>
 <p>Now the imputation is complete and with the resulting <code>mids</code>-object you could do all the things described in the section above.</p>
 <p>Here we were especially interested in multilevel models, so we want to run our analysis model on the imputed data. By this it is meant that the model is run on every of the <code>M</code> completed data set and then the results are combined according to Rubin’s combining rules <span class="citation">(Rubin 1987)</span>.</p>
 <p><code>mice</code> has the functions <code>fit</code> and <code>pool</code> to do this. But only certain parameters of your model are pooled.</p>
@@ -304,11 +306,11 @@ result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span cla
 ## 
 ## Pooled coefficients:
 ## (Intercept)        conc 
-##   26.954047    4.829146 
+##   26.542885    4.890094 
 ## 
 ## Fraction of information about the coefficients missing due to nonresponse: 
 ## (Intercept)        conc 
-##   0.1047089   0.3972818</code></pre>
+##   0.1357577   0.1483588</code></pre>
 <p><code>hmi_pools</code> tries to give a flexible alternative to this function. The function needs two things</p>
 <ol style="list-style-type: decimal">
 <li>your multiple imputed data sets (the <code>mids</code> object you created with <code>hmi</code>)</li>
@@ -340,7 +342,7 @@ result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span cla
 
 <span class="kw">hmi_pool</span>(<span class="dt">mids =</span> result_multi, <span class="dt">analysis_function =</span> my_analysis)</code></pre></div>
 <pre><code>##    beta_0    beta_1    sigma0   sigma01    sigma1 
-## 26.954047  4.829146 50.471889 16.494351  5.549079</code></pre>
+## 26.542885  4.890094 49.504131 19.311003  7.934697</code></pre>
 </div>
 </div>
 <div id="references" class="section level1 unnumbered">
@@ -368,7 +370,7 @@ result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span cla
   (function () {
     var script = document.createElement("script");
     script.type = "text/javascript";
-    script.src  = "https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
     document.getElementsByTagName("head")[0].appendChild(script);
   })();
 </script>
