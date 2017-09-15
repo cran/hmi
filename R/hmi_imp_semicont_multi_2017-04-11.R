@@ -7,7 +7,6 @@
 #' @param y_imp A Vector with the variable to impute.
 #' @param X_imp A data.frame with the fixed effects variables.
 #' @param Z_imp A data.frame with the random effects variables.
-#' @param model_formula A \code{\link[stats]{formula}} used for the analysis model.
 #' @param heap A numeric saying to which (single) values the data might be heaped.
 #' @param clID A vector with the cluster ID.
 #' @param nitt An integer defining number of MCMC iterations (see MCMCglmm).
@@ -19,7 +18,6 @@ imp_semicont_multi <- function(y_imp,
                              X_imp,
                              Z_imp,
                              clID,
-                             model_formula,
                              heap = 0,
                              nitt = 3000,
                              thin = 10,

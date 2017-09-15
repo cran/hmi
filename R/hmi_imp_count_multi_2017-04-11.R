@@ -39,7 +39,7 @@ imp_count_multi <- function(y_imp,
   length.alpha <- length(table(clID)) * n.par.rand
 
   #starting model
-  ph <- sample_imp(y_imp)
+  ph <- sample_imp(y_imp)[, 1]
   tmp_0_all <- data.frame(target = ph)
   xnames_0 <- paste("X", 1:ncol(X_imp_stand), sep = "")
   tmp_0_all[xnames_0] <- X_imp_stand
@@ -80,13 +80,14 @@ imp_count_multi <- function(y_imp,
                 G = list(G1 = list(V = diag(ncol(Z_imp_stand)), nu = 0.002)))
 
 
-  MCMCglmm_draws <- MCMCglmm::MCMCglmm(fixformula, random = randformula, data = tmp_2_sub,
+  MCMCglmm_draws <- MCMCglmm::MCMCglmm(fixformula, random = randformula,
+                                       data = tmp_2_sub,
                                        verbose = FALSE, pr = TRUE, prior = prior,
                                        family = "poisson",
                                        saveX = TRUE, saveZ = TRUE,
-                                       nitt = 3000,
-                                       thin = 10,
-                                       burnin = 1000)
+                                       nitt = nitt,
+                                       thin = thin,
+                                       burnin = burnin)
 
 
   pointdraws <- MCMCglmm_draws$Sol

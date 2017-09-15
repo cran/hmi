@@ -21,7 +21,7 @@ imp_cont_single <- function(y_imp,
 
   n <- length(y_imp)
   #define a place holder (ph)
-  ph <- sample_imp(y_imp)
+  ph <- sample_imp(y_imp)[, 1]
 
   lmstart_all <- stats::lm(ph ~ 0 +., data = X_imp)
 

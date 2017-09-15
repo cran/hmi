@@ -2,7 +2,7 @@
 % Please edit documentation in R/hmi_imp_semicont_single_2017-04-11.R
 \name{imp_semicont_single}
 \alias{imp_semicont_single}
-\title{The function for hierarchical imputation of semicontinous variables.}
+\title{The function for hierarchical imputation of semicontinuous variables.}
 \usage{
 imp_semicont_single(y_imp, X_imp, heap = 0)
 }

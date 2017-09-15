@@ -7,7 +7,7 @@
 imp_count_single(y_imp, X_imp)
 }
 \arguments{
-\item{y_imp}{A Vector with the variable to impute.}
+\item{y_imp}{A vector with the variable to impute.}
 
 \item{X_imp}{A data.frame with the fixed effects variables.}
 }

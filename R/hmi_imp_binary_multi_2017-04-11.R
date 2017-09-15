@@ -5,7 +5,6 @@
 #' @param X_imp A data.frame with the fixed effects variables.
 #' @param Z_imp A data.frame with the random effects variables.
 #' @param clID A vector with the cluster ID.
-#' @param model_formula A \code{\link[stats]{formula}} used for the analysis model.
 #' @param nitt An integer defining number of MCMC iterations (see MCMCglmm).
 #' @param thin An integer defining the thinning interval (see MCMCglmm).
 #' @param burnin An integer defining the percentage of draws from the gibbs sampler
@@ -15,7 +14,6 @@ imp_binary_multi <- function(y_imp,
                       X_imp,
                       Z_imp,
                       clID,
-                      model_formula,
                       nitt = 3000,
                       thin = 10,
                       burnin = 1000){
@@ -61,7 +59,7 @@ imp_binary_multi <- function(y_imp,
   # The later is more or less only the technical framework to get the imputed values.
 
   #define a place holder (ph)
-  ph <- sample_imp(y_binary[, 1])
+  ph <- sample_imp(y_binary[, 1])[, 1]
 
 
   tmp_0_sub <- data.frame(target = ph, X_imp_stand)[!missind, , drop = FALSE]
@@ -142,10 +140,8 @@ imp_binary_multi <- function(y_imp,
   # -------------------- drawing samples with the parameters from the gibbs sampler --------
 
 
-  linkfunction <- function(x){
-    ret <- boot::inv.logit(x)
-    return(ret)
-  }
+  linkfunction <- boot::inv.logit
+
 
   ###start imputation
 

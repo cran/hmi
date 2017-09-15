@@ -4,8 +4,8 @@
 \alias{imp_binary_multi}
 \title{The function for hierarchical imputation of binary variables.}
 \usage{
-imp_binary_multi(y_imp, X_imp, Z_imp, clID, model_formula, nitt = 3000,
-  thin = 10, burnin = 1000)
+imp_binary_multi(y_imp, X_imp, Z_imp, clID, nitt = 3000, thin = 10,
+  burnin = 1000)
 }
 \arguments{
 \item{y_imp}{A Vector with the variable to impute.}
@@ -15,8 +15,6 @@ imp_binary_multi(y_imp, X_imp, Z_imp, clID, model_formula, nitt = 3000,
 \item{Z_imp}{A data.frame with the random effects variables.}
 
 \item{clID}{A vector with the cluster ID.}
-
-\item{model_formula}{A \code{\link[stats]{formula}} used for the analysis model.}
 
 \item{nitt}{An integer defining number of MCMC iterations (see MCMCglmm).}
 

@@ -34,7 +34,7 @@ imp_binary_single <- function(y_imp,
   n <- length(y_binary)
 
   #define a place holder (ph)
-  ph <- sample_imp(y_binary[, 1])
+  ph <- sample_imp(y_binary[, 1])[, 1]
 
   tmp_0_sub <- data.frame(target = y_binary, X_imp_stand)[!missind, , drop = FALSE]
   tmp_0_all <- data.frame(target = ph, X_imp_stand)

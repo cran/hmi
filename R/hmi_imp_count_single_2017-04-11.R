@@ -1,7 +1,7 @@
 #' The function for imputation of binary variables.
 #'
 #' The function is called by the wrapper.
-#' @param y_imp A Vector with the variable to impute.
+#' @param y_imp A vector with the variable to impute.
 #' @param X_imp A data.frame with the fixed effects variables.
 #' @return A n x 1 data.frame with the original and imputed values.
 imp_count_single <- function(y_imp,
@@ -20,7 +20,7 @@ imp_count_single <- function(y_imp,
   n <- length(y_imp)
 
   #starting model
-  ph <- sample_imp(y_imp)
+  ph <- sample_imp(y_imp)[, 1]
   tmp_0_all <- data.frame(target = ph)
   xnames_0 <- paste("X", 1:ncol(X_imp_stand), sep = "")
   tmp_0_all[xnames_0] <- X_imp_stand

@@ -4,8 +4,8 @@
 \alias{imp_semicont_multi}
 \title{The function for hierarchical imputation of semicontinuous variables.}
 \usage{
-imp_semicont_multi(y_imp, X_imp, Z_imp, clID, model_formula, heap = 0,
-  nitt = 3000, thin = 10, burnin = 1000)
+imp_semicont_multi(y_imp, X_imp, Z_imp, clID, heap = 0, nitt = 3000,
+  thin = 10, burnin = 1000)
 }
 \arguments{
 \item{y_imp}{A Vector with the variable to impute.}
@@ -15,8 +15,6 @@ imp_semicont_multi(y_imp, X_imp, Z_imp, clID, model_formula, heap = 0,
 \item{Z_imp}{A data.frame with the random effects variables.}
 
 \item{clID}{A vector with the cluster ID.}
-
-\item{model_formula}{A \code{\link[stats]{formula}} used for the analysis model.}
 
 \item{heap}{A numeric saying to which (single) values the data might be heaped.}
 

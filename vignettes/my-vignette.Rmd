@@ -212,7 +212,7 @@ The example uses the data set `CO2` about the "Carbon Dioxide Uptake in Grass Pl
 
 You can see in advance how variables will be treated internally by `hmi` if you call the `list_of_types_maker`. For example `example_list_of_types <- list_of_types_maker(CO2)` gives you the following list:
 <!--
-source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-04-20.R')
+source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-09-14.R')
 example_list_of_types <- list_of_types_maker(CO2)
 example_list_of_types
 -->
@@ -267,9 +267,10 @@ For the residuals in most cases, we use non-informative, but improper priors by 
 To illustrate the use of `hmi`, we stick to the `CO2` data set; but as it has no missing values, we add those artificially:
 
 ```{r echo = TRUE}
-ex <- CO2
+library("lme4")
+ex <- sleepstudy
 set.seed(1)
-ex[sample(1:nrow(CO2), size = 20), "uptake"] <- NA
+ex[sample(1:nrow(CO2), size = 20), "Reaction"] <- NA
 head(ex) # e.g. in line 5 there is a NA now.
 ```
 
@@ -277,8 +278,9 @@ The most simple call of `hmi` would be be:
 
 ```{r echo = FALSE, message = FALSE, cache = TRUE}
 library("mice")
-source('C:/Users/Matthias/Documents/hmi/R/hmi_wrapper_2017-04-20.R')
-source('C:/Users/Matthias/Documents/hmi/R/hmi_imp_cont_single_2017-04-11.R')
+library("hmi")
+#source('C:/Users/Matthias/Documents/hmi/R/hmi_wrapper_2017-08-24.R')
+#source('C:/Users/Matthias/Documents/hmi/R/hmi_imp_cont_single_2017-04-11.R')
 ```
 
 ```{r eval = FALSE, message = FALSE, cache = TRUE}
@@ -309,47 +311,29 @@ Let's move to a more elaborated imputation than just calling `hmi(example)`. A b
 If you run this model, you will get results but also a warning about convergence:
 ```{r eval = TRUE, message = TRUE, cache = TRUE}
 library("lme4")
-lmer(uptake ~ 1 + conc + (1 + conc | Plant), data = ex)
+lmer(Reaction ~ 1 + Days + (1 + Days | Subject), data = ex)
 ```
 
-As `lmer` suggests to rescale variables, we will rescale `conc`.
-```{r eval = TRUE, message = FALSE, cache = TRUE}
-library("lme4")
-ex_2 <- ex
-ex_2$conc <- (ex_2$conc - mean(ex_2$conc))/sd(ex_2$conc)
-mod <- lmer(uptake ~ 1 + conc + (1 + conc | Plant), data = ex_2)
-```
-The coefficients can be interpreted as follows:
-```{r eval = TRUE, message = FALSE, cache = TRUE}
-fixef(mod)
-```
-The `uptake` of carbon dioxide at zero ambient carbon dioxide concentration is `27.12` units (micromole/m^2 sec). If now the ambient carbon dioxide concentration increases by one standard deviation, the expected `uptake` increases by `5.43` units.
-
-The estimated random effects covariance matrix can be obtained by
-```{r eval = TRUE, message = FALSE, cache = TRUE}
-vcov(mod)
-```
-It shows moderate variances and positively correlated ($\rho = 0.615$) random effects. So plants with a higher "baseline uptake" have (on average) also a higher concetration effect.
 
 If we would run again `hmi(example_2)` without further specification, we would end up in running a single level imputation. To make `hmi` run a multilevel imputation model, you have to specify a multilevel analysis model and this has two mandatory elements: 1. variables with a clusterspecific effect (*random effects variables*) and 2. a variable indicating the clusters. By passing your analysis model formula to `hmi` you implicitly specify your imputation model(s). If there are more variables with missing values, then the other variables are tried to be imputed with a similar model. This means that maybe only one covariate in the analysis model becomes the target variable in the imputation model, but the random effects variables and the cluster ID keep the same (except in the case a random effects variable is to be imputed. In this case this variable is dropped from the random effects part of the imputation model). So here a multilevel imputation would be set up by (as we have only one variable to impute, we can set maxit to 1):
 ```{r eval = FALSE, message = FALSE, cache = TRUE}
 set.seed(1)
-result_multi <- hmi(data = ex_2, model_formula = uptake ~ 1 + conc + (1 + conc | Plant), maxit = 1)
+result_multi <- hmi(data = ex, model_formula = Reaction ~ 1 + Days + (1 + Days | Subject), maxit = 1)
 ```
 Here we get the message that "Intercept" was not found in the data and we can decide whether we want to stop the imputation routine or continue with a single level imputation. The reason for this message is the strict control in `hmi` whether your model and your data fit together. So if you are sure that you want to have a intercept variable in your model, include one into your data.
 
 ```{r eval = FALSE, message = FALSE, cache = TRUE}
-ex_2$Intercept <- 1
 set.seed(1)
-result_multi <- hmi(data = ex_2, model_formula = uptake ~ 1 + conc + (1 + conc |Plant), maxit = 1)
+result_multi <- hmi(data = ex, model_formula = Reaction ~ 1 + Days + (1 + Days | Subject), maxit = 1)
 ```
 
 ```{r eval = TRUE, echo = FALSE, results = "hide", message = FALSE, cache = TRUE}
-source('C:/Users/Matthias/Documents/hmi/R/hmi_imp_cont_multi_2017-04-11.R')
-source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-04-20.R')
-ex_2$Intercept <- 1
+library("hmi")
+#source('C:/Users/Matthias/Documents/hmi/R/hmi_imp_cont_multi_2017-09-03.R')
+#source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-09-14.R')
+ex
 set.seed(1)
-result_multi <- hmi(data = ex_2, model_formula = uptake ~ 1 + conc + (1 + conc |Plant), maxit = 1)
+result_multi <- hmi(data = ex, model_formula = Reaction ~ 1 + Days + (1 + Days | Subject), maxit = 1)
 ```
 
 Now the imputation is complete and with the resulting `mids`-object you could do all the things described in the section above. 
@@ -358,7 +342,7 @@ Here we were especially interested in multilevel models, so we want to run our a
 
 `mice` has the functions `fit` and `pool` to do this. But only certain parameters of your model are pooled. 
 ```{r eval = TRUE, echo = TRUE, message = FALSE, cache = TRUE}
-pool(with(data = result_multi, expr = lmer(uptake ~ 1 + conc + (1 + conc |Plant))))
+pool(with(data = result_multi, expr = lmer(Reaction ~ 1 + Days + (1 + Days | Subject))))
 ```
 
 `hmi_pools` tries to give a flexible alternative to this function. The function needs two things
@@ -379,7 +363,7 @@ In the following example runs a mixed model and extracts the fixed effects and t
   # the following lines are an example where the analyst is interested in the fixed intercept
   # and fixed slope and the random intercepts variance,
   # the random slopes variance and their covariance
-  my_model <- lmer(uptake ~ 1 + conc + (1 + conc |Plant), data = complete_data)
+  my_model <- lmer(Reaction ~ 1 + Days + (1 + Days | Subject), data = complete_data)
 
   parameters_of_interest[[1]] <- fixef(my_model)[1]
   parameters_of_interest[[2]] <- fixef(my_model)[2]
@@ -395,7 +379,8 @@ In the following example runs a mixed model and extracts the fixed effects and t
 hmi_pool(mids = result_multi, analysis_function = my_analysis)
 ```
 ```{r eval = TRUE, echo = FALSE, message = FALSE, cache = TRUE}
-source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-04-20.R')
+library("hmi")
+#source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-09-14.R')
  my_analysis <- function(complete_data){
   # In this list, you can write all the parameters you are interested in.
   # Those will be averaged.
@@ -406,7 +391,7 @@ source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-04-20.R')
   # the following lines are an example where the analyst is interested in the fixed intercept
   # and fixed slope and the random intercepts variance,
   # the random slopes variance and their covariance
-  my_model <- lmer(uptake ~ 1 + conc + (1 + conc |Plant), data = complete_data)
+  my_model <- lmer(Reaction ~ 1 + Days + (1 + Days | Subject), data = complete_data)
 
   parameters_of_interest[[1]] <- fixef(my_model)[1]
   parameters_of_interest[[2]] <- fixef(my_model)[2]

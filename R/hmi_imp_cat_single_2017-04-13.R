@@ -29,7 +29,7 @@ imp_cat_single <- function(y_imp,
   n <- length(y_imp)
 
   #starting model
-  ph <- sample_imp(y_imp)
+  ph <- sample_imp(y_imp)[, 1]
   tmp_0_all <- data.frame(target = ph)
   xnames_0 <- paste("X", 1:ncol(X_imp_stand), sep = "")
   tmp_0_all[xnames_0] <- X_imp_stand
