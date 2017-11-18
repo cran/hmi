@@ -17,7 +17,7 @@ imp_interval <- function(y_imp, X_imp){
 
   # ----------------------------- preparing the X data ------------------
   # remove excessive variables
-  X_imp <- remove_excessives(X_imp)
+  X_imp <- cleanup(X_imp)
 
   # standardize X
   X_imp_stand <- stand(X_imp)
@@ -27,7 +27,7 @@ imp_interval <- function(y_imp, X_imp){
   # has to be numeric, so it must only consists of precise observations
   decomposed <- decompose_interval(interval = y_imp)
 
-  if(any(decomposed$lower_general > decomposed$upper_general, na.rm = TRUE)){
+  if(any(decomposed[, "lower_general"] > decomposed[, "upper_general"], na.rm = TRUE)){
     stop("in your interval covariate, some values in the lower bound exceed the upper bound.")
   }
 
@@ -44,30 +44,30 @@ imp_interval <- function(y_imp, X_imp){
   y_precise_template_stand <- (y_precise_template - y_mean)/y_sd + 1
   #if there are imprecise values only...
   #if(all(is.na(y_precise_template))){
-    #... the template will be set up with a draw from between the borders
-    low_sample <- decomposed_stand$lower_general
-    up_sample <- decomposed_stand$upper_general
+  #... the template will be set up with a draw from between the borders
+  low_sample <- decomposed_stand[, "lower_general"]
+  up_sample  <- decomposed_stand[, "upper_general"]
 
-    y_precise_template <- msm::rtnorm(n = n, lower = low_sample,
+  y_precise_template <- msm::rtnorm(n = n, lower = low_sample,
                                       upper = up_sample,
                                       mean = y_precise_template_stand,
                                       sd = 1)
   #}
 
   ph_stand <- y_precise_template
-  tmp_1 <- data.frame(target = ph_stand)
+  tmp_0 <- data.frame(target = ph_stand)
 
   # run a linear model to get the suitable model.matrix for imputation of the NAs
-  lmstart <- stats::lm(ph_stand ~ 0 + . , data = X_imp_stand)
+  xnames_0 <- paste("X", 1:ncol(X_imp_stand), sep = "")
+  tmp_0[xnames_0] <- X_imp_stand
+  lmstart <- stats::lm(target ~ 0 + . , data = tmp_0)
   X_model_matrix_1 <- stats::model.matrix(lmstart)
+
+  tmp_1 <- data.frame(target = ph_stand)
   xnames_1 <- paste("X", 1:ncol(X_model_matrix_1), sep = "")
   tmp_1[, xnames_1] <- X_model_matrix_1
 
-
-  fixformula_1 <- stats::formula(paste("target ~ 0 +", paste(xnames_1, collapse = "+"), sep = ""))
-
-
-  reg_1 <- stats::lm(fixformula_1, data = tmp_1)
+  reg_1 <- stats::lm(target ~ 0 + ., data = tmp_1)
 
   # remove variables with an NA coefficient
 
@@ -76,13 +76,11 @@ imp_interval <- function(y_imp, X_imp){
   xnames_2 <- xnames_1[!is.na(stats::coefficients(reg_1))]
   tmp_2[, xnames_2] <- X_model_matrix_1[, !is.na(stats::coefficients(reg_1)), drop = FALSE]
 
-  fixformula_2 <- stats::formula(paste("target ~ 0 +", paste(xnames_2, collapse = "+"), sep = ""))
-  reg_2 <- stats::lm(fixformula_2, data = tmp_2)
+  reg_2 <- stats::lm(target ~ 0 + ., data = tmp_2)
   X_model_matrix_2 <- stats::model.matrix(reg_2)
 
   max.se <- abs(stats::coef(reg_2) * 3)
   coef.std <- sqrt(diag(stats::vcov(reg_2)))
-
 
   includes_unimportants <- any(coef.std > max.se) | any(abs(stats::coef(reg_2)) < 1e-03)
   counter <- 0
@@ -92,9 +90,9 @@ imp_interval <- function(y_imp, X_imp){
     X_model_matrix_2 <- as.data.frame(X_model_matrix_2[,
                                       coef.std <= max.se & stats::coef(reg_2) >= 1e-03, drop = FALSE])
     if(ncol(X_model_matrix_2) == 0){
-      reg_2 <- stats::lm(ph_stand[, 1] ~ 1)
+      reg_2 <- stats::lm(ph_stand ~ 1)
     }else{
-      reg_2 <- stats::lm(ph_stand[, 1] ~ 0 + . , data = X_model_matrix_2)
+      reg_2 <- stats::lm(ph_stand ~ 0 + . , data = X_model_matrix_2)
     }
 
     #remove regression parameters which have a very high standard error
@@ -106,15 +104,17 @@ imp_interval <- function(y_imp, X_imp){
 
   MM_1 <- as.data.frame(X_model_matrix_2)
 
+  tmp_3 <- data.frame(target = ph_stand)
+
+  xnames_3 <- names(MM_1)
+  tmp_3[, xnames_3] <- MM_1
   # --preparing the ml estimation
   # -define rounding intervals
-
-
 
   #####maximum likelihood estimation using starting values
   ####estimation of the parameters
 
-  lmstart2 <- stats::lm(ph_stand~ 0 + ., data = MM_1) # it might be more practical to run the model
+  lmstart2 <- stats::lm(target ~ 0 + ., data = tmp_3) # it might be more practical to run the model
   #only based on the observed data, but this could cause some covariates in betastart2 to be dropped
   betastart2 <- as.vector(lmstart2$coef)
   sigmastart2 <- stats::sigma(lmstart2)
@@ -149,8 +149,8 @@ imp_interval <- function(y_imp, X_imp){
 
   negloglik2_generated <- function_generator(para = starting_values,
                                              X = MM_1[keep, , drop = FALSE],
-                                             lower = decomposed_stand$lower_imprecise[keep],
-                                             upper = decomposed_stand$upper_imprecise[keep])
+                                             lower = decomposed_stand[, "lower_imprecise"][keep],
+                                             upper = decomposed_stand[, "upper_imprecise"][keep])
 
   m2 <- stats::optim(par = starting_values, negloglik2_generated,
                      method = "BFGS",#alternative: "Nelder-Mead"
@@ -223,9 +223,9 @@ imp_interval <- function(y_imp, X_imp){
   #for this purpose we have to replace the lower and upper bounds
   # of those observations with an NA in y_imp by -Inf and Inf
 
-  expanded_lower <- decomposed_stand$lower_general
+  expanded_lower <- decomposed_stand[, "lower_general"]
 
-  expanded_upper <- decomposed_stand$upper_general
+  expanded_upper <- decomposed_stand[, "upper_general"]
 
 
   #draw values from the truncated normal distributions
@@ -238,13 +238,13 @@ imp_interval <- function(y_imp, X_imp){
   # precise and not rounded data need no impuation at all.
   tnorm_draws <- msm::rtnorm(n = n, lower = expanded_lower,
                                 upper = expanded_upper,
-                                   mean = as.matrix(MM_1) %*% beta_hat,
+                                   mean = mymean,
                                    sd = sqrt(Sigma))
 
   #undo the standardization
   y_ret <- (tnorm_draws - 1) * y_sd + y_mean
 
-  return(data.frame(y_imp = y_ret))
+  return(data.frame(y_ret = y_ret))
 }
 
 

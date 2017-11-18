@@ -16,10 +16,10 @@ imp_roundedcont <- function(y_imp, X_imp){
   }
 
   n <- length(y_imp)
-  
+
   # ----------------------------- preparing the X data ------------------
   # remove excessive variables
-  X_imp <- remove_excessives(X_imp)
+  X_imp <- cleanup(X_imp)
 
   # standardize X
   X_imp_stand <- stand(X_imp)
@@ -31,33 +31,34 @@ imp_roundedcont <- function(y_imp, X_imp){
   #can be an aggregate of imprecise observations (e.g. the mean of lower and upper bound))
   #2. The place holder ph must not contain any NAs, NaNs or Infs.
   decomposed <- decompose_interval(interval = y_imp)
-  
+
   #short check for consistency:
-  if(any(decomposed$lower_general > decomposed$upper_general, na.rm = TRUE)){
+  if(any(decomposed[, "lower_general"] > decomposed[, "upper_general"], na.rm = TRUE)){
     stop("in your interval covariate, some values in the lower bound exceed the upper bound.")
   }
-  
+
   # classify the data into the three types of observations:
   # 1. precise data (like 3010 or 3017 - in interval notation "3010;3010", "3017;3017")
   # 2. imprecise data (like "3000;3600")
   # 3. missing data (NA - in interval notation "-Inf;Inf")
   #get the indicator of the missing values
-  indicator_precise <- !is.na(decomposed$precise)
-  indicator_imprecise <- !is.na(decomposed$lower_imprecise)
-  indicator_missing <- is.infinite(decomposed$lower_general) & is.infinite(decomposed$upper_general)
+  indicator_precise <- !is.na(decomposed[, "precise"])
+  indicator_imprecise <- !is.na(decomposed[, "lower_imprecise"])
+  indicator_missing <- is.infinite(decomposed[, "lower_general"]) &
+    is.infinite(decomposed[, "upper_general"])
 
   # standardise the data
-  y_precise <- decomposed$precise
-   
+  y_precise <- decomposed[, "precise"]
+
   mean_y_precise <- mean(y_precise, na.rm = TRUE)
   sd_y_precise <- stats::sd(y_precise, na.rm = TRUE)
-  
+
   # We intentionally add + 1 because otherwise with the standardized x,
   # the intercept in the regression y ~ x can be exactly 0
   y_imp_precise_stand <- (y_imp - mean_y_precise)/sd_y_precise + 1
   y_precise_stand <- (y_precise - mean_y_precise)/sd_y_precise + 1
   if(is_interval(y_imp_precise_stand)){
-    y_imp_precise_stand <- decompose_interval(y_imp_precise_stand)$precise
+    y_imp_precise_stand <- decompose_interval(y_imp_precise_stand)[, "precise"]
   }
   decomposed_stand <- (decomposed - mean_y_precise)/sd_y_precise + 1
   #generate a place holder that will be used in later models to get model.matrices
@@ -67,36 +68,42 @@ imp_roundedcont <- function(y_imp, X_imp){
   # Later, another model is run. In many cases, both models are redundant.
   # But in cases with categorical covariates, X_model_matrix_1 will generate
   # additional covariates compared to X_imp_stand.
-  # The names of these variables are then stored in tmp_1. 
-  # Then in the second model it is checked for unneeded variables 
+  # The names of these variables are then stored in tmp_1.
+  # Then in the second model it is checked for unneeded variables
   # (e.g. unneeded categories).
-  lmstart <- stats::lm(ph_stand ~ 0 + . , data = X_imp_stand)
+  tmp_0 <- data.frame(target = ph_stand)
+
+  # run a linear model to get the suitable model.matrix for imputation of the NAs
+  xnames_0 <- paste("X", 1:ncol(X_imp_stand), sep = "")
+  tmp_0[xnames_0] <- X_imp_stand
+
+  reg_0 <- stats::lm(target ~ 0 + . , data = tmp_0)
 
   # extract the model matrix from the model
-  X_model_matrix_1 <- stats::model.matrix(lmstart)
+  X_model_matrix_1 <- stats::model.matrix(reg_0)
   xnames_1 <- paste("X", 1:ncol(X_model_matrix_1), sep = "")
   tmp_1 <- data.frame(target = ph_stand)
   tmp_1[, xnames_1] <- X_model_matrix_1
 
-  fixformula_1 <- stats::formula(paste("target ~ 0 +",
-                                       paste(xnames_1, collapse = "+"),
-                                       sep = ""))
+  safetycounter <- 0
+  unneeded <- TRUE
+  while(any(unneeded) & safetycounter <= ncol(X_imp)){
 
-  # Run another model and...
-  reg_1 <- stats::lm(fixformula_1, data = tmp_1)
+    # Run another model and...
+    reg_1 <- stats::lm(target ~ 0 +., data = tmp_1)
+    X_model_matrix_1 <- stats::model.matrix(reg_1)
 
-  #... remove unneeded variables with an NA coefficient
-  unneeded <- is.na(stats::coefficients(reg_1))
+    #... remove unneeded variables with an NA coefficient
+    unneeded <- is.na(stats::coefficients(reg_1))
+    xnames_1 <- colnames(X_model_matrix_1)[!unneeded]
 
-  xnames_2 <- xnames_1[!unneeded]
+    tmp_1 <- data.frame(target = ph_stand)
+    tmp_1[, xnames_1] <- X_model_matrix_1[, !unneeded, drop = FALSE]
 
-  tmp_2 <- data.frame(target = ph_stand)
-  tmp_2[, xnames_2] <- X_model_matrix_1[, !unneeded, drop = FALSE]
+    safetycounter <- safetycounter + 1
+  }
 
-  fixformula_2 <- stats::formula(paste("target ~ 0 +",
-                                       paste(xnames_2, collapse = "+"),
-                                       sep = ""))
-  reg_2 <- stats::lm(fixformula_2, data = tmp_2)
+  reg_2 <- stats::lm(target ~ 0 + ., data = tmp_1)
   X_model_matrix_2 <- stats::model.matrix(reg_2)
 
   # Now check for variables with too much variance
@@ -151,7 +158,7 @@ imp_roundedcont <- function(y_imp, X_imp){
   p6 <- y_precise %% 1000 ==  0  #
   p6[is.na(p6)] <- FALSE
 
-  p <- factor( p2 +  p4 +  p6, 
+  p <- factor( p2 +  p4 +  p6,
               levels = c("0", "1", "2", "3"), ordered = TRUE)
   ###indicator which variables need to be imputed because they are rounded (and not because they are missing)
   rounded <- p != 0
@@ -195,7 +202,7 @@ imp_roundedcont <- function(y_imp, X_imp){
     error = function(cond) {
       cat("We assume that perfect separation occured in your rounded continuous variable, because of too few observations.\n
 Consider specifying the variable to be continuous via list_of_types (see ?hmi).\n")
-      cat("Here's the original error message:\n")
+      cat("Here is the original error message:\n")
       cat(as.character(cond))
 
       return(NULL)
@@ -203,7 +210,7 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
     warning = function(cond) {
       cat("We assume that perfect separation occured in your rounded continuous variable, because of too few observations.\n
 Consider specifying the variable to be continuous via list_of_types (see ?hmi).\n")
-      cat("Here's the original warning message:\n")
+      cat("Here is the original warning message:\n")
       cat(as.character(cond))
 
       return(NULL)
@@ -213,13 +220,17 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
     }
   )
 
+  #???More or just one parameter for the rounding degree model???
   gamma1start <- probitstart$coefficients[names(probitstart$coefficients) == "ph_stand"]
   #as.vector(probitstart$coefficients) # the fix effect(s)
   kstart <- as.vector(probitstart$zeta) # the tresholds (in the summary labeled "Intercepts")
   #explaining the tresholds:
-  #0 (rounding degree 1), 0|1 (reounding degree 5),  1|2 (10),  2|3 (50),  3|4 (100),   4|5 (500),   5|6 (1000)
+  #0 (rounding degree 1), 0|1 (reounding degree 10),  1|2 (100),  2|3 (1000)
 
-  lmstart2 <- stats::lm(ph_stand ~ 0 + ., data = MM_1)
+  tmp_3 <- data.frame(target = ph_stand)
+  xnames_3 <- colnames(MM_1)
+  tmp_3[, xnames_3] <- MM_1
+  lmstart2 <- stats::lm(target ~ 0 + ., data = tmp_3)
   # it might be more practical to run the model
   #only based on the observed data, but this could cause some covariates in betastart2 to be dropped
   betastart2 <- as.vector(lmstart2$coef)
@@ -257,8 +268,8 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
 
 
   #the interval data have to be standardised as well:
-  lower_imprecise_stand <- decomposed_stand$lower_imprecise 
-  upper_imprecise_stand <- decomposed_stand$upper_imprecise
+  lower_imprecise_stand <- decomposed_stand[, "lower_imprecise"]
+  upper_imprecise_stand <- decomposed_stand[, "upper_imprecise"]
 
   negloglik2_generated <- function_generator(para = starting_values,
                                              X = MM_1[keep, , drop = FALSE],
@@ -290,7 +301,7 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
     error = function(cond) {
       cat("Hessian matrix couldn't be inverted (in the imputation function of the rounded continuous variable).
               Still, you should get a result, but which needs special attention.\n")
-      cat("Here's the original error message:\n")
+      cat("Here is the original error message:\n")
       cat(as.character(cond))
 
       Sigma_ml2 <- diag(ncol(hess))/100
@@ -298,7 +309,7 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
     },
     warning = function(cond) {
       cat("There seems to be a problem with the Hessian matrix in the imputation of the rounded continuous variable\n")
-      cat("Here's the original warning message:\n")
+      cat("Here is the original warning message:\n")
       cat(as.character(cond))
 
       Sigma_ml2 <- solve(hess)
@@ -346,16 +357,16 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
   #BEGIN IMPUTING INTERVAL-DATA AND COMPLETELY MISSING DATA#
   # The imputation for precise but rounded data follows in the next section.
   # precise and not rounded data need no impuation at all.
-  
-  lower_general_stand <- decomposed_stand$lower_general[indicator_imprecise | indicator_missing]
-  upper_general_stand <- decomposed_stand$upper_general[indicator_imprecise | indicator_missing]
-  
+
+  lower_general_stand <- decomposed_stand[, "lower_general"][indicator_imprecise | indicator_missing]
+  upper_general_stand <- decomposed_stand[, "upper_general"][indicator_imprecise | indicator_missing]
+
   #draw values from the truncated normal distributions
   # the bounds are straight forward for the interval data.
   # for the missing data, the bounds are -Inf and +Inf,
   # which is equivalent to draw from a unbounded normal distribution
 
-  mytry <- msm::rtnorm(n = sum(indicator_imprecise | indicator_missing), 
+  mytry <- msm::rtnorm(n = sum(indicator_imprecise | indicator_missing),
                        lower = lower_general_stand,
                         upper = upper_general_stand,
                         mean = as.matrix(MM_1[indicator_imprecise | indicator_missing, , drop = FALSE]) %*%
@@ -385,7 +396,7 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
   #hint: we don't use g_lower because we state that a value of 1500 is not necessarily
   # a multiple of 500; it could also be rounded to the next 10 or oven 1 unit.
   colnames(elements) <- c("mean_g", "mean_y", "g_lower", "y_lower", "g_upper", "y_upper")
-  
+
   while(any(rounded)){
 
     ###draw values for g and y from a truncated multivariate normal
@@ -421,22 +432,22 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
 
     # check if there are problematic means of g. This is the case if the mean is outside
     # the interval for a possible g.
-    toosmall_gs <- problematic_elements[, 1] < problematic_elements[, 3] 
+    toosmall_gs <- problematic_elements[, 1] < problematic_elements[, 3]
     toolarge_gs <- problematic_elements[, 1] > problematic_elements[, 5]
 
     elements[which(rounded)[which(problematic_draws)[toosmall_gs]], 1] <-
       elements[which(rounded)[which(problematic_draws)[toosmall_gs]], 3]
-    
+
     elements[which(rounded)[which(problematic_draws)[toolarge_gs]], 1] <-
       elements[which(rounded)[which(problematic_draws)[toolarge_gs]], 5]
-    
 
-    toosmall_ys <- problematic_elements[, 2] < problematic_elements[, 4] 
+
+    toosmall_ys <- problematic_elements[, 2] < problematic_elements[, 4]
     toolarge_ys <- problematic_elements[, 2] > problematic_elements[, 6]
-    
+
     elements[which(rounded)[which(problematic_draws)[toosmall_ys]], 2] <-
       elements[which(rounded)[which(problematic_draws)[toosmall_ys]], 4]
-    
+
     elements[which(rounded)[which(problematic_draws)[toolarge_ys]], 2] <-
       elements[which(rounded)[which(problematic_draws)[toolarge_ys]], 6]
 
@@ -462,7 +473,7 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
 
   }
 
-  y_ret <- data.frame(y_imp = imp_tmp)
+  y_ret <- data.frame(y_ret = imp_tmp)
 
   return(y_ret)
 }

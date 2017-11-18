@@ -11,7 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 
-<meta name="date" content="2017-09-15" />
+<meta name="date" content="2017-11-18" />
 
 <title>hmi: hierarchical multiple imputation</title>
 
@@ -71,7 +71,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <h4 class="author"><em>Matthias Speidel</em></h4>
 <h4 class="author"><em>Jörg Drechsler</em></h4>
 <h4 class="author"><em>Shahab Jolani</em></h4>
-<h4 class="date"><em>2017-09-15</em></h4>
+<h4 class="date"><em>2017-11-18</em></h4>
 
 
 
@@ -246,7 +246,7 @@ result &lt;-<span class="st"> </span><span class="kw">hmi</span>(ex)</code></pre
 ## 2 258.7047    1     308
 ## 3 250.8006    2     308
 ## 4 321.4398    3     308
-## 5 223.8680    4     308
+## 5 157.6074    4     308
 ## 6 414.6901    5     308</code></pre>
 </div>
 <div id="multilevel-example" class="section level3">
@@ -283,11 +283,11 @@ result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span cla
 ## 
 ## Pooled coefficients:
 ## (Intercept)        Days 
-##   250.54536    10.74789 
+##   249.67007    10.94977 
 ## 
 ## Fraction of information about the coefficients missing due to nonresponse: 
 ## (Intercept)        Days 
-##  0.05822723  0.04509566</code></pre>
+##  0.06929138  0.05734534</code></pre>
 <p><code>hmi_pools</code> tries to give a flexible alternative to this function. The function needs two things</p>
 <ol style="list-style-type: decimal">
 <li>your multiple imputed data sets (the <code>mids</code> object you created with <code>hmi</code>)</li>
@@ -319,7 +319,7 @@ result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span cla
 
 <span class="kw">hmi_pool</span>(<span class="dt">mids =</span> result_multi, <span class="dt">analysis_function =</span> my_analysis)</code></pre></div>
 <pre><code>##    beta_0    beta_1    sigma0   sigma01    sigma1 
-## 250.54536  10.74789 569.47300  12.99442  33.63168</code></pre>
+## 249.67007  10.94977 573.11537  24.48180  31.22304</code></pre>
 </div>
 </div>
 <div id="references" class="section level1 unnumbered">

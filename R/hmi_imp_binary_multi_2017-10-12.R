@@ -6,17 +6,21 @@
 #' @param Z_imp A data.frame with the random effects variables.
 #' @param clID A vector with the cluster ID.
 #' @param nitt An integer defining number of MCMC iterations (see MCMCglmm).
-#' @param thin An integer defining the thinning interval (see MCMCglmm).
-#' @param burnin An integer defining the percentage of draws from the gibbs sampler
-#' that should be discarded as burn in (see MCMCglmm).
-#' @return A n x 1 data.frame with the original and imputed values.
+#' @param burnin burnin A numeric value between 0 and 1 for the desired percentage of
+#' Gibbs samples that shall be regarded as burnin.
+#' @param thin An integer to set the thinning interval range. If thin = 1,
+#' every iteration of the Gibbs-sampling chain will be kept. For highly autocorrelated
+#' chains, that are only examined by few iterations (say less than 1000),
+#' @return A list with 1. 'y_ret' the n x 1 data.frame with the original and imputed values.
+#' 2. 'Sol' the Gibbs-samples for the fixed effects parameters.
+#' 3. 'VCV' the Gibbs-samples for variance parameters.
 imp_binary_multi <- function(y_imp,
                       X_imp,
                       Z_imp,
                       clID,
-                      nitt = 3000,
-                      thin = 10,
-                      burnin = 1000){
+                      nitt = 22000,
+                      burnin = 2000,
+                      thin = 20){
 
   # ----------------------------- preparing the y data ------------------
   # stransform y_imp into a real binary with only zeros and ones (and NAs).
@@ -36,13 +40,13 @@ imp_binary_multi <- function(y_imp,
   # ----------------------------- preparing the X and Z data ------------------
 
   # remove excessive variables
-  X_imp <- remove_excessives(X_imp)
+  X_imp <- cleanup(X_imp)
 
   # standardise the covariates in X (which are numeric and no intercept)
   X_imp_stand <- stand(X_imp)
 
   # -- standardise the covariates in Z (which are numeric and no intercept)
-
+  Z_imp <- cleanup(Z_imp)
   Z_imp_stand <- stand(Z_imp)
 
 
@@ -135,7 +139,7 @@ imp_binary_multi <- function(y_imp,
   variancedraws <- MCMCglmm_draws$VCV
 
   number_of_draws <- nrow(pointdraws)
-  select_record <- sample(1:number_of_draws, 1, replace = TRUE)
+  select_record <- sample(1:number_of_draws, size = 1)
 
   # -------------------- drawing samples with the parameters from the gibbs sampler --------
 
@@ -172,8 +176,9 @@ imp_binary_multi <- function(y_imp,
       y_ret[i, 1] <- second_possibility
     }
   }
-
+  colnames(y_ret) <- "y_ret"
 
   # --------- returning the imputed data --------------
-  return(y_ret)
+  ret <- list(y_ret = y_ret, Sol = xdraws, VCV = variancedraws)
+  return(ret)
 }

@@ -11,7 +11,7 @@ imp_semicont_single(y_imp, X_imp, heap = 0)
 
 \item{X_imp}{A data.frame with the fixed effects variables.}
 
-\item{heap}{A scalar saying to which value the data might be heaped.}
+\item{heap}{A numeric value saying to which value the data might be heaped.}
 }
 \value{
 A n x 1 data.frame with the original and imputed values.

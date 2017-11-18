@@ -1,11 +1,10 @@
-
-
 #' Sample imputation.
 #'
 #' Function to sample values in a variable from other (observed) values in this variable.
 #' So this imputation does not use further covariates.
 #' @param variable A vector of size \code{n} with missing values.
-#' @return A n times 1 data.frame without missing values.
+#' @return A list with a n times 1 data.frame without missing values and
+#'  a list with the chains of the Gibbs-samples for the fixed effects and variance parameters.
 #' @examples
 #' set.seed(123)
 #' sample_imp(c(1, NA, 3, NA, 5))
@@ -69,10 +68,10 @@ get_type <- function(variable){
   if(is_interval(variable)){
     variable <- as.character(variable)
     type <- "interval"
-    #if the precise part of an interval variable is rounded,
+    #if more than 50% of the precise part of an interval variable is rounded,
     #the whole variable is considered to be a rounded continous variable
 
-    if(sum(decompose_interval(interval = variable)$precise %% 5 == 0, na.rm = TRUE)/
+    if(sum(decompose_interval(interval = variable)[, "precise"] %% 5 == 0, na.rm = TRUE)/
        length(variable[!is.na(variable)]) > 0.5){
       type <- "roundedcont"
     }
@@ -87,19 +86,25 @@ get_type <- function(variable){
       # it is considered to be an integer...
       if(max(abs(variable - as.integer(variable)), na.rm = TRUE) == 0){
         type <- "count"
-        #... despite it is a rounded continuous variable:
+
+        #... but not if too many categories are available...
+        if(length(table(variable)) > 20){
+          type <- "cont"
+        }
+
+        #... or it is a rounded continuous variable:
         if(sum(variable %% 5 == 0, na.rm = TRUE)/
            length(variable[!is.na(variable)]) > 0.5){
           type <- "roundedcont"
         }
+
         return(type)
       }
 
-      #if the variable is numeric and more than 5% of the variable values are 0,
+      #if the variable is numeric and more than 10% of the variable values share the same value,
       #We consider this variable as semi-continious.
 
-      if(sum(variable == 0, na.rm = TRUE)/
-         length(variable[!is.na(variable)]) > 0.05){
+      if(max(table(variable))/length(variable[!is.na(variable)]) > 0.1){
         type <- "semicont"
       }
 
@@ -789,9 +794,9 @@ extract_varnames <- function(model_formula = NULL, constant_variables,
 #' Function to check multilevel models on the existence of fixed intercepts
 #'
 #' Function to check multilevel models on the existence of fixed intercepts.
-#' The specification of an intercept by calling a 1-column (eg "int")
+#' The specification of an intercept by calling a 1-column (e.g. "int")
 #' is not counted towards the existence of an intercept.
-#' Contradictionary inputs like "~ 1 + 0 + X1 + ..." or "~ -1 + 1 + X1 + ..."
+#' Contradictory inputs like "~ 1 + 0 + X1 + ..." or "~ -1 + 1 + X1 + ..."
 #' will throw an error.
 #' @param model_formula A formula (from class \code{formula})
 #' @return A boolean value indicating whether there is a fixed intercept in the model or not
@@ -825,9 +830,9 @@ fixed_intercept_check <- function(model_formula){
 #' Function to check multilevel models on the existence of random intercepts
 #'
 #' Function to check multilevel models on the existence of random intercepts.
-#' The specification of an intercept by calling a 1-column (eg "int")
+#' The specification of an intercept by calling a 1-column (e.g. "int")
 #' is not counted towards the existence of an intercept.
-#' Contradictionary inputs like "~ 1 + 0 + X1 + ..." or "~ -1 + 1 + X1 + ..."
+#' Contradictory inputs like "~ 1 + 0 + X1 + ..." or "~ -1 + 1 + X1 + ..."
 #' will throw an error.
 #' @param model_formula A formula (from class \code{formula})
 #' @return A boolean value indicating whether there is a fixed intercept in the model or not
@@ -878,9 +883,9 @@ random_intercept_check <- function(model_formula){
   return(random_intercept_exists)
 }
 
-#' Function to transform numeric (or character) vectors into an interval object
+#' Function to transform objects into an interval object
 #'
-#' Function to transform numeric (or character) vectors into an interval object
+#' Function to transform numeric (or character) vectors or n times 2 matrices into an interval object
 #' @param x An object to transform.
 #' Currently the function can transform numeric vectors and characters
 #' @seealso \link[hmi]{generate_interval}
@@ -894,7 +899,12 @@ as.interval <- function(x){
     x <- as.character(x)
   }
   if(is.numeric(x)){
-    x <- paste(x, ";", x, sep = "")
+    if(is.matrix(x) && ncol(x) == 2){
+      return(generate_interval(lower = x[, 1], upper = x[, 2]))
+    }else{
+      x <- paste(x, ";", x, sep = "")
+    }
+
   }
   x[is.na(x)] <- c("NA;NA")
   raw <- unlist(strsplit(x, ";"))
@@ -902,7 +912,6 @@ as.interval <- function(x){
   lower <- as.numeric(raw[seq(1, 2*length(x), by = 2)])
   upper <- as.numeric(raw[seq(2, 2*length(x), by = 2)])
   ret <- generate_interval(lower, upper)
-  class(ret) <- "interval"
   return(ret)
 }
 
@@ -945,6 +954,7 @@ generate_interval <- function(lower, upper){
 is_interval <- function(x){
   if("interval" %in% class(x)) return(TRUE)
 
+  if("formula" %in% class(x)) return(FALSE)
   #NAs in x shall be ignored.
   x <- x[!is.na(x)]
 
@@ -1010,7 +1020,7 @@ split_interval <- function(interval){
 #' missing observations ("-Inf;Inf" into NA)
 #' @param interval an \code{interval} object of length n
 #' (if it is something else, it is returned unchanged)
-#' @return A data.frame with 5 columns.
+#' @return A matrix with 5 columns.
 #' 1. A column "precise" for the precise observations
 #' (length of interval = 0, e.g. "3000;3000"). If observation i is not precise,
 #' the i-th entry in this columns will be \code{NA}.
@@ -1040,13 +1050,16 @@ decompose_interval <- function(interval){
   }
   tmp <- split_interval(interval)
   dists <- tmp[, 2] - tmp[, 1]
+  dists[is.na(dists)] <- Inf
   precise <- ifelse(abs(dists) < 1e-20, tmp[, 1], NA)
-  imprecise <- ifelse(abs(dists) >= 1e-20 | is.na(dists), interval, NA)
+  imprecise <- as.interval(ifelse(abs(dists) >= 1e-20 | is.na(dists), interval, NA))
   tmp_imprecise <- split_interval(imprecise)
-  ret <- data.frame(precise, lower_imprecise = tmp_imprecise[, 1],
-                    upper_imprecise = tmp_imprecise[, 2],
-                    lower_general = ifelse(is.na(tmp[, 1]), -Inf, tmp[, 1]),
-                    upper_general = ifelse(is.na(tmp[, 2]), Inf, tmp[, 2]))
+
+  ret <- matrix(c(precise, tmp_imprecise[, 1],
+                  tmp_imprecise[, 2],
+                  ifelse(is.na(tmp[, 1]), -Inf, tmp[, 1]),
+                  ifelse(is.na(tmp[, 2]), Inf, tmp[, 2])), ncol = 5)
+  colnames(ret) <- c("precise", "lower_imprecise", "upper_imprecise", "lower_general", "upper_general")
   return(ret)
 }
 
@@ -1097,6 +1110,102 @@ idf2interval <- function(idf){
   }
   colnames(ret) <- names(idf)[-length(idf)]
   return(ret)
+}
+
+#' Plotting interval variables
+#'
+#' Function to plot interval variables by rectangles. The bounds of the rectangles are given by the
+#' lower and upper bounds of the interval variables. To avoid precise observations to have a line-width
+#' of 0, small values are added to the upper and lower bounds what guarantees the rectangles (or lines or points)
+#' to be easily visible in the plot.
+#' @param x In its most save way, \code{x} is an object from class \code{interval}
+#' and jointly used with a second \code{interval} object \code{y}. If no \code{y} is given,
+#' the values of \code{x} are just plotted in order of appearance
+#' (cf. \code{plot(iris$Sepal.Length)}).
+#' \code{x} can also be a \code{formula} with two variables found in \code{data}.
+#' @param y If used jointly with \code{x}, it has to be a numeric vector or an \code{interval} object.
+#' @param data If \code{x} is a \code{fomula}, it has to be a data.frame or matrix with column names
+#' fitting to the two variables named in the formula.
+#' @param col The color of the rectangles.
+#' @param xlab A title for the x axis: see \code{title}.
+#' @param ylab A title for the y axis: see \code{title}.
+#' @param xlim Numeric vectors of length 2, giving the x coordinate ranges.
+#' @param ylim Numeric vectors of length 2, giving the y coordinate ranges.
+#' @param ... graphical parameters such as \code{main}.
+#' @examples
+#' \dontrun{
+#' #Works like plot:
+#' plot.interval(Sepal.Length ~ Sepal.Width, data = iris)
+#' #But designed to plot interval objects:
+#' plot.interval(x = artificial$age, y = artificial$income)
+#' }
+#' @export
+plot.interval <- function(x = NULL, y = NULL, data = NULL, col = "black",
+                          xlab = NULL, ylab = NULL,
+                          xlim = NULL, ylim = NULL, ...){
+  myylab <- "y"
+  myxlab <- "x"
+  if(is.null(x) && is.null(y)){
+    y <- data[, 1]
+    x <- data[, 2]
+    myylab <- colnames(data)[ , 1]
+    myxlab <- colnames(data)[ , 2]
+  }
+
+  if((is_interval(x) | is.numeric(x)) && is.null(y)){
+    y <- x
+    x <- 1:length(y)
+    myylab <- "values"
+    myxlab <- "Index"
+  }
+
+  if(class(x) == "formula"){
+    yname <- as.character(x)[2]
+    xname <- as.character(x)[3]
+    y <- data[, yname]
+    x <- data[, xname]
+    myylab <- yname
+    myxlab <- xname
+  }
+
+  if(is_interval(y)){
+    y_split <- split_interval(y)
+  }else{
+    y_split <- cbind(y, y)
+  }
+
+  if(is_interval(x)){
+    x_split <- split_interval(x)
+  }else{
+    x_split <- cbind(x, x)
+  }
+
+  xrange <- range(x_split, na.rm = TRUE, finite = TRUE)
+  yrange <- range(y_split, na.rm = TRUE, finite = TRUE)
+
+  #rect(xleft = -1, ybottom = 1, xright = -0.5, ytop = 1.5, density = 1000)#add ,...
+  #make sure points and lines can be seen
+  y_eps <- (yrange[2] - yrange[1])/500
+  y_split <- y_split + rep(y_eps*c(-1, 1), each = nrow(y_split))
+
+  x_eps <- (xrange[2] - xrange[1])/500
+  x_split <- x_split + rep(x_eps*c(-1, 1), each = nrow(x_split))
+
+  #replace infinite values with values outside the range
+  y_split[is.infinite(y_split[, 1]), 1] <- yrange[1] - (yrange[2] - xrange[1])
+  y_split[is.infinite(y_split[, 2]), 2] <- yrange[2] + (yrange[2] - yrange[1])
+
+  x_split[is.infinite(x_split[, 1]), 1] <- xrange[1] - (xrange[2] - xrange[1])
+  x_split[is.infinite(x_split[, 2]), 2] <- xrange[2] + (xrange[2] - xrange[1])
+  if(!is.null(xlab)) myxlab <- xlab
+  if(!is.null(ylab)) myylab <- ylab
+  if(!is.null(xlim)) xrange <- xlim
+  if(!is.null(ylim)) yrange <- ylim
+  graphics::plot(0, pch = '', ylab = myylab, xlab = myxlab,
+       xlim = xrange,
+       ylim = yrange, ...)
+  graphics::rect(xleft = x_split[, 1], ybottom = y_split[, 1], xright = x_split[, 2], ytop = y_split[, 2],
+       border = NA, col = col, ...)
 }
 
 #' Adding function
@@ -1201,14 +1310,16 @@ stand <- function(X){
   return(X_stand)
 }
 
-#' Removing excessive factors
+#' cleanup data.frames
 #'
-#' Function to exclude variables that have too many levels as they may cause numerical problems
+#' Function to exclude variables that have too many levels
+#' (as they may cause numerical problems) and to change binary factors to 0-1 coding
+#' (as such factors might generate linear dependent variables).
 #' @param X A n times p data.frame with p fixed (or random) effects variables.
 #' @param k An integer defining the allowed maximum of levels in a factor covariate.
 #' @return A n times (p-r) data.frame, with r being the number of variables with too many factors.
 #' @export
-remove_excessives <- function(X, k = 10){
+cleanup <- function(X, k = 10){
 
   if(!is.data.frame(X)) stop("X has to be a data.frame.")
 
@@ -1234,6 +1345,20 @@ remove_excessives <- function(X, k = 10){
     interval_counter <- interval_counter + 1
   }
 
+  #Make any binary data coded in 0 and 1.
+  binary <- types == "binary"
+  for(l in which(binary)){
+    #make every binaray variable a factor, and then numeric, which should results in
+    #a 1 and 2 coding.
+    tmp <- as.numeric(factor(X[, l]))
+    #With the following formula variables from 1 and 2 coding will be transformed
+    #into 0-1 coding.
+    #The formula is kept general for the unlikely event that the line above didn't
+    #gave a 1-2 but r-s coding.
+    #If r < s then the formula recodes r to (r-r)/(s-r) = 0 and s to (s-r)/(s-r) = 1.
+    #If r > s then r will be 1 and s = 0.
+    X[, l] <- (tmp - min(tmp))/(max(tmp) - min(tmp))
+  }
   # determine the "categorical" variables.
   categorical <- types == "categorical"
 
@@ -1267,10 +1392,15 @@ remove_excessives <- function(X, k = 10){
 #' @param list_of_types a list specifying the types of the variables.
 #' See \code{hmi} for details.
 #' @param nitt An integer defining number of MCMC iterations (see \code{MCMCglmm}).
-#' @param thin An integer defining the thinning interval (see \code{MCMCglmm}).
-#' @param burnin An integer defining the percentage of draws from the gibbs sampler
-#' that should be discarded as burn in (see \code{MCMCglmm}).
+#' @param burnin burnin A numeric value between 0 and 1 for the desired percentage of
+#' Gibbs samples that shall be regarded as burnin.
+#' @param thin An integer to set the thinning interval range. If thin = 1,
+#' every iteration of the Gibbs-sampling chain will be kept. For highly autocorrelated
+#' chains, that are only examined by few iterations (say less than 1000),
+#' the \code{geweke.diag} might fail to detect convergence. In such cases it is
+#' essential to look a chain free from autocorelation.
 #' @param mn An integer defining the minimum number of individuals per cluster.
+#' @param heap A numeric value saying to which value the data might be heaped.
 #' @return A data.frame where the values, that have a missing value in the original
 #' dataset, are imputed.
 #' @export
@@ -1279,7 +1409,10 @@ imputationcycle <- function(data_before,
                             NA_locator,
                             fe, interaction_names,
                             list_of_types,
-                            nitt, thin, burnin, mn){
+                            nitt,
+                            burnin,
+                            thin,
+                            mn, heap = 0){
 
   if(!is.data.frame(data_before)){
     stop("data_before has the be a data.frame")
@@ -1296,11 +1429,17 @@ imputationcycle <- function(data_before,
   data_before <- data_before[, names(sort(missing_rates)), drop = FALSE]
   NA_locator <- NA_locator[, names(sort(missing_rates)), drop = FALSE]
 
+  #update missing rates after the sorting
+  missing_rates <- colMeans(NA_locator)
+
   #get variables with missing values
   incomplete_variables <- names(missing_rates)[missing_rates > 0]
 
   variables_to_impute <- union(incomplete_variables, names(list_of_types)[list_of_types == "roundedcont" |
                            list_of_types == "interval"])
+
+  #initialize list with the chains of Gibbs-samples
+  chains <- list()
 
   for(l2 in variables_to_impute){#do the imputation cycle
 
@@ -1344,7 +1483,6 @@ imputationcycle <- function(data_before,
     #now, remove variables from X an Z that currently have NAs
     #(wich should only occur in the first, initial imputation cycle)
     tmp_X <- tmp_X[, stats::complete.cases(t(tmp_X)), drop = FALSE]
-    tmp_Z <- tmp_Z[, stats::complete.cases(t(tmp_Z)), drop = FALSE]
 
     #To preserve the relation of y and x properly,
     #y has to be included as covariate in the imputation model for x.
@@ -1355,6 +1493,7 @@ imputationcycle <- function(data_before,
       tmp_Z <- cbind(tmp_Z, X[, fe$target_varname])
     }
 
+    tmp_Z <- tmp_Z[, stats::complete.cases(t(tmp_Z)), drop = FALSE]
     #check number of observed values in each cluster.
 
     if(fe$clID_varname != ""){
@@ -1431,13 +1570,17 @@ imputationcycle <- function(data_before,
       }else{
 
         #print("Currently the multilevel model.")
-        imp <- imp_binary_multi(y_imp = data_before[, l2],
+        tmp <- imp_binary_multi(y_imp = data_before[, l2],
                                 X_imp = tmp_X,
                                 Z_imp = tmp_Z,
                                 clID = data_before[, fe$clID_varname],
                                 nitt = nitt,
-                                thin = thin,
-                                burnin =  burnin)
+                                burnin = burnin,
+                                thin = thin)
+
+        imp <- tmp$y_ret
+        chains[[l2]]$Sol <- tmp$Sol
+        chains[[l2]]$VCV <- tmp$VCV
       }
     }
 
@@ -1452,14 +1595,16 @@ imputationcycle <- function(data_before,
       }else{
 
         #print("Currently the multilevel model.")
-        imp <- imp_cont_multi(y_imp = data_before[, l2],
+        tmp <- imp_cont_multi(y_imp = data_before[, l2],
                               X_imp = tmp_X,
                               Z_imp = tmp_Z,
                               clID = data_before[, fe$clID_varname],
                               nitt = nitt,
-                              thin = thin,
-                              burnin = burnin)
-
+                              burnin = burnin,
+                              thin = thin)
+        imp <- tmp$y_ret
+        chains[[l2]]$Sol <- tmp$Sol
+        chains[[l2]]$VCV <- tmp$VCV
       }
 
     }
@@ -1472,18 +1617,21 @@ imputationcycle <- function(data_before,
         #print("Currently the single level model.")
         imp <- imp_semicont_single(y_imp = data_before[, l2],
                                    X_imp = tmp_X,
-                                   heap = 0)
+                                   heap = heap)
       }else{
 
         #print("Currently the multilevel model.")
-        imp <- imp_semicont_multi(y_imp = data_before[, l2],
+        tmp <- imp_semicont_multi(y_imp = data_before[, l2],
                                   X_imp = tmp_X,
                                   Z_imp = tmp_Z,
                                   clID = data_before[, fe$clID_varname],
-                                  heap = 0,
+                                  heap = heap,
                                   nitt = nitt,
-                                  thin = thin,
-                                  burnin = burnin)
+                                  burnin = burnin,
+                                  thin = thin)
+        imp <- tmp$y_ret
+        chains[[l2]]$Sol <- tmp$Sol
+        chains[[l2]]$VCV <- tmp$VCV
 
       }
 
@@ -1513,26 +1661,33 @@ imputationcycle <- function(data_before,
 
         #print("Currently the single level model.")
         imp <- imp_count_single(y_imp = data_before[, l2],
-                                X_imp = tmp_X)
+                                X_imp = tmp_X,
+                                nitt = nitt,
+                                burnin = burnin,
+                                thin = thin)
 
 
       }else{
 
         #print("Currently the multilevel model.")
-        imp <- imp_count_multi(y_imp = data_before[, l2],
+        tmp <- imp_count_multi(y_imp = data_before[, l2],
                                X_imp = tmp_X,
                                Z_imp = tmp_Z,
                                clID = data_before[, fe$clID_varname],
                                nitt = nitt,
-                               thin = thin,
-                               burnin =  burnin)
+                               burnin = burnin,
+                               thin = thin)
+
+        imp <- tmp$y_ret
+        chains[[l2]]$Sol <- tmp$Sol
+        chains[[l2]]$VCV <- tmp$VCV
 
       }
 
     }
 
     if(tmp_type == "categorical"){
-
+      data_before[, l2] <- original_data[, l2]
       # if the cluster ID is to be imputed, obviously we cannot run a multilevel model.
       if(use_single_level || l2 == fe$clID_varname){
 
@@ -1543,13 +1698,17 @@ imputationcycle <- function(data_before,
       }else{
 
         #print("Currently the multilevel model.")
-        imp <- imp_cat_multi(y_imp = as.factor(data_before[, l2]),
+        tmp <- imp_cat_multi(y_imp = as.factor(data_before[, l2]),
                              X_imp = tmp_X,
                              Z_imp = tmp_Z,
                              clID = data_before[, fe$clID_varname],
                              nitt = nitt,
-                             thin = thin,
-                             burnin = burnin)
+                             burnin = burnin,
+                             thin = thin)
+
+        imp <- tmp$y_ret
+        chains[[l2]]$Sol <- tmp$Sol
+        chains[[l2]]$VCV <- tmp$VCV
       }
     }
 
@@ -1564,13 +1723,17 @@ imputationcycle <- function(data_before,
       }else{
 
         #print("Currently the multilevel model.")
-        imp <- imp_orderedcat_multi(y_imp = as.factor(data_before[, l2]),
+        tmp <- imp_orderedcat_multi(y_imp = as.factor(data_before[, l2]),
                                     X_imp = tmp_X,
                                     Z_imp = tmp_Z,
                                     clID = data_before[, fe$clID_varname],
                                     nitt = nitt,
-                                    thin = thin,
-                                    burnin = burnin)
+                                    burnin = burnin,
+                                    thin = thin)
+
+        imp <- tmp$y_ret
+        chains[[l2]]$Sol <- tmp$Sol
+        chains[[l2]]$VCV <- tmp$VCV
       }
     }
 
@@ -1580,5 +1743,135 @@ imputationcycle <- function(data_before,
     data_before[, l2] <- imp
   }
   data_after <- data_before[, original_ordering, drop = FALSE]
-  return(data_after)
+  ret <- list(data_after = data_after, chains = chains)
+  return(ret)
+}
+
+
+#https://stackoverflow.com/questions/5789982/reset-par-to-the-default-values-at-startup
+#https://stackoverflow.com/users/429846/gavin-simpson
+#' Function to reset all graphics parameters
+#'
+#' With this function other functions can manipulate the \code{par} settings and
+#' when they are finished restore the settings to the state before the function call.
+#' The package \code{hmi} uses this mechanism for its function \code{chaincheck}.
+#' @author Gavin Simpson
+#' @references https://stackoverflow.com/questions/5789982/reset-par-to-the-default-values-at-startup
+#' @export
+resetPar <- function(){
+  grDevices::dev.new()
+  op <- graphics::par(no.readonly = TRUE)
+  grDevices::dev.off()
+  op
+}
+
+#' Checking the chains on convergence
+#'
+#' Formally tests the Gibbs-sampling chains on convergence.
+#' After the burn in is discarded, the remaining iterations of each chain
+#' are tested following Geweke (1992).
+#' In this test, the arithmetic means and their standard errors of the first 10\%
+#' and last 50\% of the chain (from now on always after discarding the burn in)
+#' are compared. In case of a stationary distribution, both means have the same
+#' expected value. The difference between both arithmetic means is divided
+#'  THE ONE (CHECK) standard error.
+#' This is the Z-score, the test statistic.
+#' Chains not passing the test will be plotted.
+#' Each plot will flag which (fixed effect or variance) parameter was tested;
+#' and what variable was to be imputed and the cycle and imputation run.
+#' To see the next plot, the user has to hit <Return> (or "Enter").
+#' @param mids A mids object generated by hmi
+#' (alternatively a list), having an element called "gibbs" with the chains
+#' of the Gibbs-sampler runs.
+#' @param alpha A numeric value between 0 and 1 for the desired significance level
+#' of the test on convergence.
+#' @param plot Logical. Shall the chains be plotted in a traceplot or not.
+#' If the number of iterations and cycles is large, click through all traceplots
+#' can be interminable.
+#' @references J Geweke (1992): Evaluating the accuracy of sampling based approaches
+#' to calculating posterior moments. In Bayesian Statistics 4
+#' (ed. JB Bernando, JO Berger, AP Dawid and Adrian FM Smith) (pp. 169-193).
+#' Clarendon Press, Oxford, UK.
+#' @export
+chaincheck <- function(mids, alpha = 0.01, plot = TRUE){
+  if(!is.numeric(alpha)){
+    stop("alpha has to be a numeric value between 0 and 1.")
+  }
+  if(length(alpha) > 1){
+    stop("alpha has to be a single numeric value between 0 and 1 and not a vector.")
+  }
+  if(alpha < 0 | alpha > 1){
+    stop("alpha has to be between 0 and 1.")
+  }
+
+  burnin <- mids$gibbs_para[2]
+  thin <- mids$gibbs_para[3]
+
+  # by hitting <Return> (a.k.a. [Enter]) the user shall be able to go through the problematic
+  # chains by hand
+  graphics::par(ask = TRUE)
+
+
+  counter_all <- 0
+  counter_problematic <- 0
+  for(i in names(mids$gibbs)){ # the imputations
+    for(j in names(mids$gibbs[[i]])){ #the cycles
+      for(k in names(mids$gibbs[[i]][[j]])){ #the variables
+        for(l in 1: ncol(mids$gibbs[[i]][[j]][[k]]$Sol)){ #the fixed effects parameters
+          tmp0 <- as.numeric(mids$gibbs[[i]][[j]][[k]]$Sol[, l])
+          tmp1 <- coda::as.mcmc(as.numeric(tmp0))
+          tmp2 <- coda::geweke.diag(tmp1, frac1 = 0.1, frac2 = 0.5)$z
+
+          counter_all <- counter_all + 1
+
+          if(abs(tmp2) > stats::qnorm(1 - alpha/2)){
+            if(plot){
+              coda::traceplot(tmp1, main = paste(i, "; ", j, ";\n",
+                                               "Imp. of variable ", k, ";\n fix parameter ", l,
+                                               "; z-value: ", round(tmp2, digits = 3),
+                                               sep = ""))
+            }
+            counter_problematic <- counter_problematic + 1
+
+          }
+        }
+
+        #In VCV the off-diagonal elements of the random effects covariance matrix are
+        #included twice, so those dublicated columns have to be removed.
+        vcv <- mids$gibbs[[i]][[j]][[k]]$VCV
+        vcv2 <- t(unique(t(as.matrix(vcv))))
+        for(l in 1: ncol(vcv2)){ # the variance parameters
+          tmp0 <- vcv2[, l]
+
+          tmp1 <- coda::as.mcmc(tmp0)
+
+          tmp2 <- coda::geweke.diag(tmp1, frac1 = 0.1, frac2 = 0.5)$z
+          #for the imputation of some variables, some variance parameters have to be fixed
+          #(e.g. binary variables). Those would give an NaN for the geweke.diag, so we set the
+          #test statistics to 0 in these cases.
+          if(get_type(tmp0) == "intercept"){
+            tmp2 <- 0
+          }
+          counter_all <- counter_all + 1
+
+          if(abs(tmp2) > stats::qnorm(1 - alpha/2)){
+            if(plot){
+              coda::traceplot(tmp1, main = paste(i, "; ", j, ";\n",
+                                                 "Imp. of variable ", k, ";\n variance parameter ", l,
+                                                 "; z-value: ", round(tmp2, digits = 3),
+                                                 sep = ""))
+            }
+            counter_problematic <- counter_problematic + 1
+
+          }
+
+        }
+      }
+    }
+  }
+  cat(paste(counter_problematic, " out of ", counter_all,
+            " chains (",round(counter_problematic/counter_all * 100, digits = 2),"%) " ,
+            "did not pass the convergence test.\n",
+            "For alpha = ", alpha, ", the expected number is ", counter_all*alpha, ".", sep = ""))
+  graphics::par(resetPar())
 }
