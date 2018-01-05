@@ -4,12 +4,14 @@
 \alias{imp_orderedcat_single}
 \title{The function to impute ordered categorical variables}
 \usage{
-imp_orderedcat_single(y_imp, X_imp)
+imp_orderedcat_single(y_imp, X_imp, rounding_degrees = c(1, 10, 100, 1000))
 }
 \arguments{
 \item{y_imp}{A Vector with the variable to impute.}
 
 \item{X_imp}{A data.frame with the fixed effects variables.}
+
+\item{rounding_degrees}{A numeric vector with the presumed rounding degrees.}
 }
 \value{
 A n x 1 data.frame with the original and imputed values as a factor.

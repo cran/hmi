@@ -40,10 +40,12 @@ sample_imp <- function(variable){
 #'}
 #'
 #' @param variable A variable (vector) from your data set.
+#' @param rounding_degrees A numeric vector with the presumed rounding degrees.
 #' @return A character denoting the type of \code{variable}.
 #' @examples get_type(iris$Sepal.Length); get_type(iris$Species)
 #' @export
-get_type <- function(variable){
+get_type <- function(variable,
+                     rounding_degrees = c(1, 10, 100, 1000)){
 
   if(all(is.na(variable))) return(NA)
 
@@ -71,7 +73,8 @@ get_type <- function(variable){
     #if more than 50% of the precise part of an interval variable is rounded,
     #the whole variable is considered to be a rounded continous variable
 
-    if(sum(decompose_interval(interval = variable)[, "precise"] %% 5 == 0, na.rm = TRUE)/
+    if(sum(apply(outer(decompose_interval(interval = variable)[, "precise"], rounding_degrees[-1], '%%') == 0,
+                 1, any), na.rm = TRUE)/
        length(variable[!is.na(variable)]) > 0.5){
       type <- "roundedcont"
     }
@@ -93,7 +96,8 @@ get_type <- function(variable){
         }
 
         #... or it is a rounded continuous variable:
-        if(sum(variable %% 5 == 0, na.rm = TRUE)/
+        if(sum(apply(outer(decompose_interval(interval = variable)[, "precise"], rounding_degrees[-1], '%%') == 0,
+                     1, any), na.rm = TRUE)/
            length(variable[!is.na(variable)]) > 0.5){
           type <- "roundedcont"
         }
@@ -108,12 +112,13 @@ get_type <- function(variable){
         type <- "semicont"
       }
 
-      # if more than 50% of the data are divisible by 5, they are considered to be rounded
-      # continous
-      # Observed 0s shall not be counted as being divisible by 5,
-      #because otherwise semi-continous variables might be considered to be rounded-continous.
+      # if more than 50% of the data are divisible by on of the given rounding degrees,
+      # they are considered to be rounded continuous
+      # Observed 0s shall not be counted as rounded,
+      #because otherwise semi-continuous variables might be considered to be rounded-continuous.
 
-      if((sum(variable %% 5 == 0, na.rm = TRUE) - sum(variable == 0, na.rm = TRUE))/
+      if((sum(apply(outer(decompose_interval(interval = variable)[, "precise"], rounding_degrees[-1], '%%') == 0,
+                    1, any), na.rm = TRUE) - sum(variable == 0, na.rm = TRUE))/
         length(variable[!is.na(variable)]) > 0.5){
         type <- "roundedcont"
       }
@@ -140,14 +145,14 @@ get_type <- function(variable){
   }else{
 
     if(ncol(variable) == 1){
-      ret <- get_type(variable[, 1])
+      ret <- get_type(variable[, 1], rounding_degrees = rounding_degrees)
       return(ret)
     }
     if(ncol(variable) > 1){
       if(is.matrix(variable)){
         variable <- as.data.frame(variable)
       }
-      ret <- unlist(lapply(variable, get_type))
+      ret <- unlist(lapply(variable, get_type, rounding_degrees = rounding_degrees))
 
       return(ret)
     }
@@ -161,14 +166,15 @@ get_type <- function(variable){
 #' For example, if a continuous variable as only two observations left, then get_type
 #' interpret this as a binary variable and not a continuous.
 #' @param data the data.frame also passed to \code{hmi}.
+#' @param rounding_degrees A numeric vector with the presumed rounding degrees.
 #' @return a list with suggested types. Each list element has the name of a variable
 #' in the data.frame. The elements contain a single character denoting the type of the variable.
 #' See \code{get_type} for details about the variable types.
 #' @export
-list_of_types_maker <- function(data){
+list_of_types_maker <- function(data, rounding_degrees = c(1, 10, 100, 1000)){
 
   if(!is.data.frame(data)) stop("We need the data in the data.frame format!")
-  ret <- lapply(data, get_type)
+  ret <- lapply(data, get_type, rounding_degrees = rounding_degrees)
 
   return(ret)
 }
@@ -248,68 +254,78 @@ hmi_pool <- function(mids, analysis_function){
 #' (regardless whether they are observed precisely or presumably rounded).
 #' @param para This is the vector \eqn{Psi} of parameters
 #' (see p. 62 in Drechsler, Kiesl & Speidel, 2015).
-#' With respect to them, the value returned by negloglik2 shall be
+#' With respect to them, the value returned by negloglik shall be
 #' maximized.\cr
-#' The starting values are c(kstart, betastart2, gammastart, sigmastart2)
-#' (the 6 thresholds (or "cutting points") for the latent variable behind the rounding degree,
+#' The starting values are c(kstart, betastart, gamma1start, sigmastart)
+#' (the thresholds (or "cutting points") for the latent variable behind the rounding degree,
 #' the regression parameters explaining the logged income,
 #' the regression parameters explaining the rounding degree
 #' and the variance parameter).
-#' @param X the data.frame of covariates.
-#' @param y_in_negloglik the target variable (a vector).
-#' @param lower the lower bound of an interval variable.
-#' @param upper the upper bound of an interval variable.
+#' @param X_in_negloglik The data.frame of covariates.
+#' @param y_precise_stand A vector of the precise (and standardized) observations from the target variable.
+#' @param lower_bounds The lower bounds of an interval variable.
+#' @param upper_bounds The upper bounds of an interval variable.
 #' @param my_p This vector is the indicator of the (highest possible) rounding degree for an observation.
 #' This parameter comes directly from the data.
-#' @param mean_y_precise the scalar with the value of the mean of the target variable.
-#' @param sd_y_precise the scalar with the value equal to the standard deviation of the target variable.
+#' @param sd_of_y_precise The scalar with the value equal to the standard deviation of the target variable.
+#' @param indicator_precise A boolean Vector indicating whether the value in the original target
+#' variable is precise (e.g. 5123 or 5123.643634) or not.
+#' @param indicator_imprecise A boolean Vector indicating whether the value in the original target
+#' variable is imprecise (e.g. "5120;5130) or not.
+#' @param indicator_outliers A boolean Vector indicating whether the value in the precise
+#' observations of the original target are outliers (smaller than 0.5\% or
+#' larger than 99.5\% of the other precise observations).
+#' @param rounding_degrees A numeric vector with the presumed rounding degrees.
 #' @references Joerg Drechsler, Hans Kiesl, Matthias Speidel (2015):
 #' "MI Double Feature: Multiple Imputation to Address Nonresponse and Rounding Errors in Income Questions",
 #' Austrian Journal of Statistics, Vol. 44, No. 2, \url{http://dx.doi.org/10.17713/ajs.v44i2.77}
 #' @return An integer equal to the (sum of the) negative log-likelihood contributions (of the observations)
-negloglik2 <- function(para, X, y_in_negloglik, lower = NA, upper = NA,
-                       my_p, mean_y_precise, sd_y_precise){
+negloglik <- function(para,
+                      X_in_negloglik,
+                      y_precise_stand,
+                      lower_bounds = NA, upper_bounds = NA,
+                      my_p, sd_of_y_precise,
+                      indicator_precise,
+                      indicator_imprecise,
+                      indicator_outliers,
+                      rounding_degrees = c(1, 10, 100, 1000)){
 
-  lower <- ifelse(is.na(lower), -Inf, lower)
-  upper <- ifelse(is.na(upper), Inf, upper)
+  lower <- ifelse(is.na(lower_bounds), -Inf, lower_bounds)
+  upper <- ifelse(is.na(upper_bounds), Inf, upper_bounds)
 
-  # the first 6 parameters are the thresholds for the rounding degree
-  # below k0: no rounding, between k0 and k1: rounding degree 5 etc.
-  # The other degrees are 10, 50, 100, 500 and 1000
-  k0 <- para[1]
-  k1 <- para[2]
-  k2 <- para[3]
-  #k3 <- para[4]
-  #k4 <- para[5]
-  #k5 <- para[6]
+  # the first parameters are the thresholds for the rounding degree
+  thresholds <- para[1:(length(rounding_degrees) - 1)]
 
   # the regression coefficients beta defining mean2 - the expected value of log(Y)
   # (see eq (2) in Drechsler, Kiesl & Speidel, 2015).
   # They also appear in mean1 (the expected value of G).
-  reg_coefs <- matrix(para[4:(length(para) - 2)], ncol = 1)
+  #The intercept is not part of the maximazition, as due to standardizations of y and x,
+  #its value is exactly 1.
+  #If there is only an intercept variable in X, there are no coefficients to be estimated.
+  if(ncol(X_in_negloglik) == 1){
+    reg_coefs <- matrix(1, ncol = 1)
+  }else{
+    reg_coefs <- matrix(c(1, para[length(rounding_degrees):(length(para) - 2)]), ncol = 1)
+  }
+
 
   gamma1 <- para[length(para) - 1] #the gamma1 from eq (3)
+  sigmax <- para[length(para)] # the (residual) variance for log(Y) (see eq (3) in Drechsler, Kiesl & Speidel, 2015)
 
-  sigmax <- para[length(para)] # the variance for log(Y) (see eq (3) in Drechsler, Kiesl & Speidel, 2015)
-
-  if (k1 < k0) return(1e50)        # make sure that threshholds
-  if (k2 < k1) return(1e50)        # are in increasing order
-  #if (k3 < k2) return(1e50)        #
-  #if (k4 < k3) return(1e50)        #
-  #if (k5 < k4) return(1e50)        #
-  if (para[length(para)] <= 0) return(1e50) # the residual variance has to be positive
-  n <- nrow(X)
+  if(is.unsorted(thresholds)) return(1e50) # make sure that threshholds are increasing
+  if(sigmax <= 0) return(1e50) # the residual variance has to be positive
 
   # mean and covariance of the joint normal of x and g ,
-  # following Rubin/Heitjan
+  # following Heitjan & Rubin
 
   #the mean for G (see eq (2) in Drechsler, Kiesl & Speidel, 2015)
-  mean1 <- gamma1 * (as.matrix(X) %*% reg_coefs)
+  individual_means_for_g <- gamma1 *
+    (as.matrix(X_in_negloglik[indicator_precise, , drop = FALSE][!indicator_outliers, , drop = FALSE]) %*% reg_coefs)
 
   #the mean for log(Y) (see eq (2) in Drechsler, Kiesl & Speidel, 2015)
-  mean2 <- as.matrix(X) %*% reg_coefs
+  individual_means_for_y <- as.matrix(X_in_negloglik) %*% reg_coefs
 
-  #the covariance matrix for log(Y) and G (see eq (3) in Drechsler, Kiesl & Speidel, 2015)
+  #the covariance matrix for G and log(Y)  (see eq (3) in Drechsler, Kiesl & Speidel, 2015)
   sigma <- matrix(c(1 + gamma1^2 * sigmax^2,
                     gamma1 * sigmax^2,
                     gamma1 * sigmax^2,
@@ -317,92 +333,57 @@ negloglik2 <- function(para, X, y_in_negloglik, lower = NA, upper = NA,
 
   rho <- max(min(stats::cov2cor(sigma)[1, 2], 1), -1)
 
-  sigma1 <- sqrt(sigma[1, 1])
-  sigma2 <- sqrt(sigma[2, 2])
-
-  # index the missing values
-  missind_negloglik <- is.na(y_in_negloglik)
-  y_obs <- y_in_negloglik[!missind_negloglik]
+  sigma_for_g <- sqrt(sigma[1, 1])
+  sigma_for_y <- sqrt(sigma[2, 2])
 
   #get the likelihood contributions of the imprecise observations
-  interval_obs <- !is.na(lower) & !is.infinite(lower)
-  sum_likelihood_imprecise_obs <- sum(log(contributions4intervals(lower = lower[interval_obs],
-                                                                   upper = upper[interval_obs],
-                                                                   mymean = mean2[interval_obs],
-                                                                   mysd = sigma2)))
+  sum_likelihood_imprecise_obs <- sum(log(contributions4intervals(lower = lower,
+                                                                  upper = upper,
+                                                                  mymean = individual_means_for_y[indicator_imprecise],
+                                                                  mysd = sigma_for_y)))
 
-  # a1 are a7 the "components" of the log-liklihood contributions
-  #
-  # If the income is not divisible by 5, only a1 is relevant
-  # if the income is divisible by 5, but not by 10, a1 + a2 are relevant
-  # etc.
+  #check for all possible rounding degrees, it is checked, what the likelihood conrtibution
+  #of G and Y is. Each possible rounding degree comes with a range of values for G and
+  #a range of values for Y.
+  # The range of values for G is set up by the thresholds k, the range of values for Y
+  # by the interval: Y_observed +- half the length of the rounding degree.
+  # To keep the code more simple, here for every observations all possible rounding degrees are
+  # evaluated (e.g. for an observation 3200 the likelihood contribution in the case
+  # of rounding to the next multiple of 1000 is evaluated); the irrelevant likelihood-contributions
+  # are set to 0 in a second step.
+  y_tmp <- y_precise_stand[!indicator_outliers]
+  likelihood_contributions_heaped <- array(dim = c(length(y_tmp), length(rounding_degrees)))
 
-  #get the value of the standard bivariate normal cumulative density function
-  #the better k0, k1, ..., sigma and rho are found, the better a1, a2, ...
+  thresholds_extended <- c(-Inf, thresholds, Inf)
 
-  a1 <- pbivnormX(x =  c(k0 - mean1[!missind_negloglik])/sigma1,
-                  y =  (y_obs + 0.5/sd_y_precise - mean2[!missind_negloglik])/sigma2,
-                  rho = rho
-  ) -
-    pbivnormX(x =  c(k0 - mean1[!missind_negloglik])/sigma1,
-              y =  (y_obs - 0.5/sd_y_precise - mean2[!missind_negloglik])/sigma2,
-              rho = rho
-    )
+  for(j in 1:ncol(likelihood_contributions_heaped)){
 
-  a1 <- pmax(1e-100, abs(a1))
-  # reason: if a1 is close to 0, a1 can be 0, due to computational imprecision
+    # pbivnormX calculates the probabilities of the standard bivariate normal distribution.
+    # Therefore the values going in, have to be standardized
 
+    # integration bounds for y
+    upper_inner <- (y_tmp + rounding_degrees[j]/2/sd_of_y_precise - individual_means_for_y[indicator_precise][!indicator_outliers])/sigma_for_y
+    lower_inner <- (y_tmp - rounding_degrees[j]/2/sd_of_y_precise - individual_means_for_y[indicator_precise][!indicator_outliers])/sigma_for_y
 
-  a2 <- components(ki = k0, kj = k1,
-                   mean1_obs = mean1[!missind_negloglik],
-                   mean2_obs = mean2[!missind_negloglik],
-                   sigma1 = sigma1,
-                   sigma2 = sigma2,
-                   rho = rho,
-                   y_obs = y_obs,
-                   mean_y_precise = mean_y_precise,
-                   sd_y_precise = sd_y_precise,
-                   half_divisor = 5)
+    # integrations bounds for g. The function c() is used to get a vector.
+    lower_outer <- c(thresholds_extended[j] - individual_means_for_g)/sigma_for_g
+    upper_outer <- c(thresholds_extended[j + 1] - individual_means_for_g)/sigma_for_g
 
-  a3 <- components(ki = k1, kj = k2,
-                   mean1_obs = mean1[!missind_negloglik],
-                   mean2_obs = mean2[!missind_negloglik],
-                   sigma1 = sigma1,
-                   sigma2 = sigma2,
-                   rho = rho,
-                   y_obs = y_obs,
-                   mean_y_precise = mean_y_precise,
-                   sd_y_precise = sd_y_precise,
-                   half_divisor = 50)
+    likelihood_contributions_heaped[, j] <- pmax(0,
+                                                 doubleintegral(lower_inner = lower_inner, upper_inner = upper_inner,
+                                                                lower_outer = lower_outer, upper_outer = upper_outer,
+                                                                cdf = pbivnormX, rho = rho))
+  }
 
-  a4 <- stats::pnorm(y_obs + 500/sd_y_precise, mean2[!missind_negloglik], sigma2) -
+  merged <- cbind(likelihood_contributions_heaped, my_p[!indicator_outliers])
 
-    pbivnormX( x =  c(k2 - mean1[!missind_negloglik])/sigma1,
-               y =  (y_obs + 500/sd_y_precise - mean2[!missind_negloglik])/sigma2,
-               rho = rho
-    ) -
-
-    stats::pnorm(y_obs - 500/sd_y_precise, mean2[!missind_negloglik], sigma2)  +
-
-    pbivnormX( x =  c(k2 - mean1[!missind_negloglik])/sigma1,
-               y =  (y_obs - 500/sd_y_precise - mean2[!missind_negloglik])/sigma2,
-               rho = rho
-    )
-
-  a2 <- pmax(0, a2) # replacing negative values by 0.
-  a3 <- pmax(0, a3)
-  a4 <- pmax(0, a4)
-
-  result_try <- cbind(a1 ,
-                      a2 * (my_p[!missind_negloglik] >= 1),
-                      a3 * (my_p[!missind_negloglik] >= 2),
-                      a4 * (my_p[!missind_negloglik] >= 3))
-
+  result_try <- apply(merged, 1, function(x) sum(x[1:x[length(x)]]))
+  result_try[is.na(result_try)] <- 0
   # Sum up the likelihood contributions (see eq (5) in Drechsler, Kiesl & Speidel, 2015)
-  result <- log(rowSums(result_try, na.rm = TRUE))
+  sum_likelihood_heaped_obs <- sum(log(result_try), na.rm = TRUE)
 
-  ret <- sum(result) + sum_likelihood_imprecise_obs
-  return(-ret) # notice the minus
+  ret <- sum_likelihood_heaped_obs + sum_likelihood_imprecise_obs
+  return(-ret) # Notice the minus.
 }
 
 #' calculate the likelihood contribution of interval data only
@@ -508,40 +489,6 @@ pbivnormX <- function (x, y, rho = 0) {
 }
 
 
-#' Function to get the likelihood contribution of different rounding degrees
-#'
-#' It is needed in the imputation routine for rounded income.
-#' See equation (5) in Drechsler, Kiesl & Speidel (2015)
-#' @param ki An integer for the i-th threshold (or "cutpoint")
-#' @param kj An integer for the j-th threshold (or "cutpoint") (ki < kj)
-#' @param mean1_obs A vector with the expected value of G for the observed data
-#' @param mean2_obs A vector with the expected value of log(Y) for the observed data
-#' @param sigma1 A scalar for the variance of the G
-#' @param sigma2 A scalar for the variance of log(Y)
-#' @param rho A scalar from [-1, 1] specifying the correlation between G and log(Y)
-#' @param y_obs The vector of the target variable (with all NAs removed)
-#' @param mean_y_precise A scalar specifying the mean of the target variable
-#' @param sd_y_precise A scalar specifying the standard deviation of the target variable
-#' @param half_divisor A scalar needed to find the bounds of possible rounding.
-#' E.g. if rounding happens to the closest multiple of 500, the half.divisor is 250.
-#' @references Joerg Drechsler, Hans Kiesl, Matthias Speidel (2015):
-#' "MI Double Feature: Multiple Imputation to Address Nonresponse and Rounding Errors in Income Questions",
-#' Austrian Journal of Statistics, Vol. 44, No. 2, \url{http://dx.doi.org/10.17713/ajs.v44i2.77}
-#' @return A vector with the contribution to the likelihood of every individual with an observed target variable value
-components <- function(ki, kj, mean1_obs, mean2_obs, sigma1, sigma2, rho, y_obs,
-                       mean_y_precise, sd_y_precise, half_divisor){
-
-  upper_inner <- ((y_obs + half_divisor - mean_y_precise)/sd_y_precise - mean2_obs)/sigma2
-  lower_inner <- ((y_obs - half_divisor - mean_y_precise)/sd_y_precise - mean2_obs)/sigma2
-  lower_outer <- c(ki - mean1_obs)/sigma1
-  upper_outer <- c(kj - mean1_obs)/sigma1
-
-  ret <- doubleintegral(lower_inner = lower_inner, upper_inner = upper_inner,
-                        lower_outer = lower_outer, upper_outer = upper_outer,
-                        cdf = pbivnormX, rho = rho)
-
-  return(ret)
-}
 
 #' Function to calculate double integrals
 #'
@@ -581,10 +528,10 @@ doubleintegral <- function(lower_inner, upper_inner, lower_outer, upper_outer,
 sampler <- function(elements, Sigma){
 
   ret <- tmvtnorm::rtmvnorm(1,
-                            mean = elements[1:2],
+                            mean = elements[c(2, 5)],
                             sigma = Sigma,
-                            lower = elements[3:4],
-                            upper = elements[5:6],
+                            lower = elements[c(1, 4)],
+                            upper = elements[c(3, 6)],
                             algorithm = "gibbs", burn.in.samples = 1000)
   return(ret)
 }
@@ -1296,13 +1243,14 @@ is.na.interval <- function(interval){
 #'
 #' Function to standardize variables that are numeric (continuous and count variables) but no rounded continuous, semicontinuous, intercepts or categorical variables.
 #' @param X A n times p data.frame with p fixed (or random) effects variables.
+#' @param rounding_degrees A numeric vector with the presumed rounding degrees.
 #' @return A n times p data.frame with the standardized versions of the numeric variables.
 #' @export
-stand <- function(X){
+stand <- function(X, rounding_degrees = c(1, 10, 100, 1000)){
   if(!is.data.frame(X)) stop("X has to be a data.frame.")
   types <- array(NA, dim = ncol(X))
   for(i in 1:length(types)){
-    types[i] <- get_type(X[, i, drop = FALSE])
+    types[i] <- get_type(X[, i, drop = FALSE], rounding_degrees = rounding_degrees)
   }
   need_stand_X <- types %in% c("cont", "count")
   X_stand <- X
@@ -1401,6 +1349,7 @@ cleanup <- function(X, k = 10){
 #' essential to look a chain free from autocorelation.
 #' @param mn An integer defining the minimum number of individuals per cluster.
 #' @param heap A numeric value saying to which value the data might be heaped.
+#' @param rounding_degrees A numeric vector with the presumed rounding degrees.
 #' @return A data.frame where the values, that have a missing value in the original
 #' dataset, are imputed.
 #' @export
@@ -1412,7 +1361,8 @@ imputationcycle <- function(data_before,
                             nitt,
                             burnin,
                             thin,
-                            mn, heap = 0){
+                            mn, heap = 0,
+                            rounding_degrees = c(1, 10, 100, 1000)){
 
   if(!is.data.frame(data_before)){
     stop("data_before has the be a data.frame")
@@ -1565,7 +1515,8 @@ imputationcycle <- function(data_before,
 
         #print("Currently the single level model.")
         imp <- imp_binary_single(y_imp = data_before[, l2],
-                                 X_imp = tmp_X)
+                                 X_imp = tmp_X,
+                                 rounding_degrees = rounding_degrees)
 
       }else{
 
@@ -1576,7 +1527,8 @@ imputationcycle <- function(data_before,
                                 clID = data_before[, fe$clID_varname],
                                 nitt = nitt,
                                 burnin = burnin,
-                                thin = thin)
+                                thin = thin,
+                                rounding_degrees = rounding_degrees)
 
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol
@@ -1590,7 +1542,8 @@ imputationcycle <- function(data_before,
 
         #print("Currently the single level model.")
         imp <- imp_cont_single(y_imp = data_before[, l2],
-                               X_imp = tmp_X)
+                               X_imp = tmp_X,
+                               rounding_degrees = rounding_degrees)
 
       }else{
 
@@ -1601,7 +1554,8 @@ imputationcycle <- function(data_before,
                               clID = data_before[, fe$clID_varname],
                               nitt = nitt,
                               burnin = burnin,
-                              thin = thin)
+                              thin = thin,
+                              rounding_degrees = rounding_degrees)
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol
         chains[[l2]]$VCV <- tmp$VCV
@@ -1617,7 +1571,8 @@ imputationcycle <- function(data_before,
         #print("Currently the single level model.")
         imp <- imp_semicont_single(y_imp = data_before[, l2],
                                    X_imp = tmp_X,
-                                   heap = heap)
+                                   heap = heap,
+                                   rounding_degrees = rounding_degrees)
       }else{
 
         #print("Currently the multilevel model.")
@@ -1628,7 +1583,9 @@ imputationcycle <- function(data_before,
                                   heap = heap,
                                   nitt = nitt,
                                   burnin = burnin,
-                                  thin = thin)
+                                  thin = thin,
+                                  rounding_degrees = rounding_degrees)
+
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol
         chains[[l2]]$VCV <- tmp$VCV
@@ -1641,8 +1598,9 @@ imputationcycle <- function(data_before,
     if(tmp_type == "roundedcont"){
 
       #yet, we don't have a multilevel imputation for rounded incomes
-      imp <- imp_roundedcont(y_imp = data_before[, l2],
-                             X_imp = tmp_X)
+      imp <- imp_roundedcont(y = data_before[, l2],
+                             X = tmp_X,
+                             rounding_degrees = rounding_degrees)
 
     }
 
@@ -1650,7 +1608,8 @@ imputationcycle <- function(data_before,
 
       #yet, we don't have a multilevel imputation for interval data
       imp <- imp_interval(y_imp = data_before[, l2],
-                          X_imp = tmp_X)
+                          X_imp = tmp_X,
+                          rounding_degrees = rounding_degrees)
 
     }
 
@@ -1664,7 +1623,8 @@ imputationcycle <- function(data_before,
                                 X_imp = tmp_X,
                                 nitt = nitt,
                                 burnin = burnin,
-                                thin = thin)
+                                thin = thin,
+                                rounding_degrees = rounding_degrees)
 
 
       }else{
@@ -1676,7 +1636,8 @@ imputationcycle <- function(data_before,
                                clID = data_before[, fe$clID_varname],
                                nitt = nitt,
                                burnin = burnin,
-                               thin = thin)
+                               thin = thin,
+                               rounding_degrees = rounding_degrees)
 
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol
@@ -1693,7 +1654,8 @@ imputationcycle <- function(data_before,
 
         #print("Currently the single level model.")
         imp <- imp_cat_single(y_imp = data_before[, l2],
-                              X_imp = tmp_X)
+                              X_imp = tmp_X,
+                              rounding_degrees = rounding_degrees)
 
       }else{
 
@@ -1704,7 +1666,8 @@ imputationcycle <- function(data_before,
                              clID = data_before[, fe$clID_varname],
                              nitt = nitt,
                              burnin = burnin,
-                             thin = thin)
+                             thin = thin,
+                             rounding_degrees = rounding_degrees)
 
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol
@@ -1718,7 +1681,8 @@ imputationcycle <- function(data_before,
 
         #print("Currently the single level model.")
         imp <- imp_orderedcat_single(y_imp = data_before[, l2],
-                                     X_imp = tmp_X)
+                                     X_imp = tmp_X,
+                                     rounding_degrees = rounding_degrees)
 
       }else{
 
@@ -1729,7 +1693,8 @@ imputationcycle <- function(data_before,
                                     clID = data_before[, fe$clID_varname],
                                     nitt = nitt,
                                     burnin = burnin,
-                                    thin = thin)
+                                    thin = thin,
+                                    rounding_degrees = rounding_degrees)
 
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol

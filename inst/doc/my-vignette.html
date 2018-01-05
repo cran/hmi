@@ -11,7 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 
-<meta name="date" content="2017-11-18" />
+<meta name="date" content="2018-01-05" />
 
 <title>hmi: hierarchical multiple imputation</title>
 
@@ -71,7 +71,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <h4 class="author"><em>Matthias Speidel</em></h4>
 <h4 class="author"><em>Jörg Drechsler</em></h4>
 <h4 class="author"><em>Shahab Jolani</em></h4>
-<h4 class="date"><em>2017-11-18</em></h4>
+<h4 class="date"><em>2018-01-05</em></h4>
 
 
 
@@ -167,7 +167,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <p>The example uses the data set <code>CO2</code> about the “Carbon Dioxide Uptake in Grass Plants”, which comes along with <code>R</code>. If you run the common <code>str(CO2)</code>, you get the information that the variable <code>Plant</code> is an <code>Ord.factor w/ 12 levels</code>, <code>Type</code> is a <code>Factor w/ 2 levels</code>, <code>Treatment</code> is a <code>Factor w/ 2 levels</code>, <code>conc</code> is a <code>num</code> and so is <code>uptake</code>.</p>
 <p><code>hmi</code> draws similar conclusions. A difference would be that we call Factors with 2 levels “binary”. Also the variable <code>conc</code> would be considered to be a special case of a continuous variable - a rounded continuous because every value of the ambient carbon dioxide concentration is divisible by at least 5.</p>
 <p>You can see in advance how variables will be treated internally by <code>hmi</code> if you call the <code>list_of_types_maker</code>. For example <code>example_list_of_types &lt;- list_of_types_maker(CO2)</code> gives you the following list: <!--
-source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-09-14.R')
+source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-10-28.R')
 example_list_of_types <- list_of_types_maker(CO2)
 example_list_of_types
 --></p>
@@ -254,7 +254,7 @@ result &lt;-<span class="st"> </span><span class="kw">hmi</span>(ex)</code></pre
 <p>Let’s move to a more elaborated imputation than just calling <code>hmi(example)</code>. A big part of the packages contribution is the multilevel imputation. For example, if your interest lies in modeling the effect of the carbon dioxide uptake rates (target variable <code>uptake</code>) by the ambient carbon dioxide concentration (explanatory variable <code>conc</code>) - and an intercept. Assuming that the effects of <code>conc</code> and the intercept on <code>uptake</code> can differ across the different plants (random effect variable <code>Plant</code>), your analysis model using <code>lmer</code> from the <code>lme4</code> package would be <code>lmer(uptake ~ 1 + conc + (1 + conc | Plant), data = example)</code>. Just for clarification how this model is read by <code>hmi</code>: the word left to <code>~</code> denotes the target variable, the parts right to <code>~</code> denote the fixed and random effects variables and the cluster ID. And in more detail, the parts within the parentheses left to <code>|</code> denote the random effects variables and the word right to <code>|</code> denotes the cluster ID.</p>
 <p>If you run this model, you will get results but also a warning about convergence:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(<span class="st">&quot;lme4&quot;</span>)
-<span class="kw">lmer</span>(Reaction <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">|</span><span class="st"> </span>Subject), <span class="dt">data =</span> ex)</code></pre></div>
+<span class="kw">lmer</span>(<span class="dt">formula =</span> Reaction<span class="op">~</span><span class="dv">1</span><span class="op">+</span>Days<span class="op">+</span>(<span class="dv">1</span><span class="op">+</span>Days<span class="op">|</span>Subject), <span class="dt">data =</span> ex, <span class="dt">na.action =</span> na.omit)</code></pre></div>
 <pre><code>## Linear mixed model fit by REML ['lmerMod']
 ## Formula: Reaction ~ 1 + Days + (1 + Days | Subject)
 ##    Data: ex

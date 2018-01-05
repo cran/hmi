@@ -4,7 +4,8 @@
 \alias{imp_count_single}
 \title{The function for imputation of binary variables.}
 \usage{
-imp_count_single(y_imp, X_imp, nitt = 22000, burnin = 2000, thin = 20)
+imp_count_single(y_imp, X_imp, nitt = 22000, burnin = 2000, thin = 20,
+  rounding_degrees = c(1, 10, 100, 1000))
 }
 \arguments{
 \item{y_imp}{A vector with the variable to impute.}
@@ -18,7 +19,9 @@ Gibbs samples that shall be regarded as burnin.}
 
 \item{thin}{An integer to set the thinning interval range. If thin = 1,
 every iteration of the Gibbs-sampling chain will be kept. For highly autocorrelated
-chains, that are only examined by few iterations (say less than 1000),}
+chains, that are only examined by few iterations (say less than 1000).}
+
+\item{rounding_degrees}{A numeric vector with the presumed rounding degrees.}
 }
 \value{
 A list with 1. 'y_ret' the n x 1 data.frame with the original and imputed values.

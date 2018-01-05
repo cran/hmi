@@ -11,6 +11,11 @@
 #' @param model_formula A \code{\link[stats]{formula}} used for the analysis model.
 #' Currently the package is designed to handle formula used in
 #' \code{lm}, \code{glm} and \code{lmer}.
+#' @param additional_variables A character with names of variables (separated by "+", like "x8+x9")
+#' that should be included in the imputation model as fixed effects variables,
+#' but not in the analysis model.
+#' An alternative would be to include such variable names into the \code{model_formula}
+#' an run a reduced analysis model with \code{hmi_pool} or the functions provide by \code{mice}.
 #' @param M An integer defining the number of imputations that should be made.
 #' @param maxit An integer defining the number of times the imputation cycle
 #' (imputing \eqn{x_1|x_{-1}} then \eqn{x_2|x_{-2}}, ... and finally \eqn{x_p|x_{-p}}) shall be repeated.
@@ -25,6 +30,7 @@
 #' essential to look a chain free from autocorelation.
 #' @param mn An integer defining the minimum number of individuals per cluster.
 #' @param heap A numeric value saying to which value the semi-continuous data might be heaped.
+#' @param rounding_degrees A numeric vector with the presumed rounding degrees.
 #' @param list_of_types a list where each list element has the name of a variable
 #' in the data.frame. The elements have to contain a single character denoting the type of the variable.
 #' See \code{get_type} for details about the variable types.
@@ -76,6 +82,7 @@
 #' @export
 hmi <- function(data,
                 model_formula = NULL,
+                additional_variables = NULL,
                 M = 5,
                 maxit = NULL,
                 nitt = 25000,
@@ -83,12 +90,13 @@ hmi <- function(data,
                 thin = 20,
                 mn = 1,
                 heap = 0,
+                rounding_degrees = c(1, 10, 100, 1000),
                 list_of_types = NULL,
                 pool_with_mice = TRUE){
   options(error = expression(NULL))
 
   if(is.null(list_of_types)){
-    tmp_list_of_types <- list_of_types_maker(data)
+    tmp_list_of_types <- list_of_types_maker(data, rounding_degrees = rounding_degrees)
   }else{
     if(!is.list(list_of_types)) stop("We need list_of_types to be a list.")
     if(!isTRUE(all.equal(sort(names(list_of_types)), sort(colnames(data))))){
@@ -196,12 +204,16 @@ How do you want to proceed: \n
   # 2: Implicitly by writing ~ X1 + ...
   # 3: By refering to an exisiting intercept variable
   # (eg. if called "Int"): ~ X1 + Int + ...
-  if(is.null(model_formula)){
-    #??? DO WE WANT TO HAVE AN INTERCEPT IF NO MODEL IS SPECIFIED???
-    #FROM PRACTICAL EXPERIENCE I WOULD SAY AN INTERCEPT IS MORE BENEFICIAL
-    #THEN HARMING.
+  model_formula_org <- model_formula
+    if(is.null(model_formula)){
     model_has_intercept <- TRUE
   }else{
+    if(is.null(additional_variables)){
+      model_formula <- stats::as.formula(format(model_formula))
+    }else{
+      model_formula <- stats::as.formula(paste(format(model_formula), additional_variables, sep = "+"))
+    }
+
     model_has_intercept <- fixed_intercept_check(model_formula) |
       random_intercept_check(model_formula) |
       any(names(which(constant_variables)) %in% all.vars(stats::delete.response(stats::terms(lme4::nobars(model_formula)))))
@@ -435,7 +447,7 @@ How do you want to proceed: \n
   # get the variable types:
   types <- array(dim = ncol(my_data))
   for(j in 1:ncol(my_data)){
-     types[j] <- get_type(my_data[, j])
+     types[j] <- get_type(my_data[, j], rounding_degrees = rounding_degrees)
   }
 
   categorical <- types == "categorical"
@@ -465,7 +477,7 @@ How do you want to proceed: \n
   tickts_drawn <- 0
 
   if(is.null(list_of_types)){
-    tmp_list_of_types <- list_of_types_maker(my_data)
+    tmp_list_of_types <- list_of_types_maker(my_data, rounding_degrees = rounding_degrees)
     #Note: here it can happen that a variable in the original_data is assumed to be
     #semicont, but after the first imputation it is considered to be continuous.
     #Therefore we update the list of types absed on the data_before
@@ -494,14 +506,15 @@ How do you want to proceed: \n
                              burnin = burnin,
                              thin = thin,
                              mn = mn,
-                             heap = heap)
+                             heap = heap,
+                             rounding_degrees = rounding_degrees)
 
       my_data <- tmp$data_after
       gibbs[[paste("imputation", i, sep = "")]][[paste("cycle", l1, sep = "")]] <-
         tmp$chains
 
       if(is.null(list_of_types)){
-        tmp_list_of_types <- list_of_types_maker(data)
+        tmp_list_of_types <- list_of_types_maker(data, rounding_degrees = rounding_degrees)
         #Note: here it can happen that a variable in the original_data is assumed to be
         #semicont, but after the first imputation it is considered to be continuous.
         #Therefore we update the list of types absed on the data_before
@@ -517,7 +530,7 @@ How do you want to proceed: \n
       #evaluate the imputed variables
       for(l2 in variables_to_impute){
         if(is.null(list_of_types)){
-          tmp_type <- get_type(my_data[, l2])
+          tmp_type <- get_type(my_data[, l2], rounding_degrees = rounding_degrees)
         }else{
           tmp_type <- list_of_types[[l2]]
         }
@@ -567,7 +580,8 @@ How do you want to proceed: \n
 
     ##get the number of missing values in each incomplete variable
     # interval data are treated as missing
-    if(get_type(data[, l2]) == "interval" | get_type(data[, l2]) == "roundedcont"){
+    if(get_type(data[, l2], rounding_degrees = rounding_degrees) == "interval" |
+       get_type(data[, l2], rounding_degrees = rounding_degrees) == "roundedcont"){
       data[, l2] <- NA
     }
     n_mis_j <- sum(is.na(data[, l2]))
@@ -623,14 +637,14 @@ How do you want to proceed: \n
   # If the user wants to use mice as a pooling function, and not hmi_pool,
   # we conduct the pooling right away using the model_formula given by the user
   # ! Note: here we add something not found in mids-objects from mice !
-  if(pool_with_mice & !is.null(model_formula)){
+  if(pool_with_mice & !is.null(model_formula_org)){
     if(fe$clID_varname == ""){ # if no cluster ID was found, run a single level model
       midsobj$pooling <- mice::pool(with(data = midsobj,
-                                         expr = stats::lm(formula = formula(format(model_formula)))))
+                                         expr = stats::lm(formula = formula(format(model_formula_org)))))
 
     }else{ # otherwise a multilevel model
       midsobj$pooling <- mice::pool(with(data = midsobj,
-                                         expr = lme4::lmer(formula = format(model_formula))))
+                                         expr = lme4::lmer(formula = format(model_formula_org))))
 
     }
   }

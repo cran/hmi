@@ -5,7 +5,7 @@
 \title{The function for hierarchical imputation of categorical variables.}
 \usage{
 imp_cat_multi(y_imp, X_imp, Z_imp, clID, nitt = 22000, burnin = 2000,
-  thin = 20)
+  thin = 20, rounding_degrees = c(1, 10, 100, 1000))
 }
 \arguments{
 \item{y_imp}{A Vector with the variable to impute.}
@@ -24,6 +24,8 @@ Gibbs samples that shall be regarded as burnin.}
 \item{thin}{An integer to set the thinning interval range. If thin = 1,
 every iteration of the Gibbs-sampling chain will be kept. For highly autocorrelated
 chains, that are only examined by few iterations (say less than 1000),}
+
+\item{rounding_degrees}{A numeric vector with the presumed rounding degrees.}
 }
 \value{
 A list with 1. 'y_ret' the n x 1 data.frame with the original and imputed values.
