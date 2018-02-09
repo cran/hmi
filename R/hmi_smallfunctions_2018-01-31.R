@@ -45,16 +45,25 @@ sample_imp <- function(variable){
 #' @examples get_type(iris$Sepal.Length); get_type(iris$Species)
 #' @export
 get_type <- function(variable,
-                     rounding_degrees = c(1, 10, 100, 1000)){
+                     rounding_degrees = NULL){
 
-  if(all(is.na(variable))) return(NA)
+  if(is.matrix(variable) && ncol(variable) == 1){
+    variable <- variable[, 1]
+  }
+  type <- "unknown"
+  if(all(is.na(variable))) return(type)
+  if(!(is.vector(rounding_degrees) | is.null(rounding_degrees))){
+    stop("rounding_degrees passed to get_type() have to be a vector or NULL.")
+  }
 
-  if(length(table(variable)) == 1){
+
+
+  if(length(unique(variable[!is.na(variable)])) == 1){
     type <- "intercept"
     return(type)
   }
 
-  if(length(table(variable)) == 2){
+  if(length(unique(variable[!is.na(variable)])) == 2){
     type <- "binary"
 
     return(type)
@@ -67,21 +76,34 @@ get_type <- function(variable,
     return(type)
   }
 
-  if(is_interval(variable)){
-    variable <- as.character(variable)
-    type <- "interval"
-    #if more than 50% of the precise part of an interval variable is rounded,
-    #the whole variable is considered to be a rounded continous variable
 
-    if(sum(apply(outer(decompose_interval(interval = variable)[, "precise"], rounding_degrees[-1], '%%') == 0,
-                 1, any), na.rm = TRUE)/
-       length(variable[!is.na(variable)]) > 0.5){
-      type <- "roundedcont"
+  if(is.vector(variable) || is.factor(variable) || is.array(variable) || is.numeric(variable)){
+
+    #checking the length of the table to be larger than two is not sufficient
+    #to get a real categoriacal variable, because for a (real) continious variable
+    #the length of the table is equal to the length of the variable
+    #(what will be in general larger than two...)
+    #Therefore it will be checked if the table has more than two entries AND
+    #wheter the varriable is a factor.
+    if(is.factor(variable)){
+      type <- "categorical"
+      if(is.ordered(variable)){
+        type <- "ordered_categorical"
+      }
+
+      return(type)
     }
-    return(type)
-  }
 
-  if(is.vector(variable) || is.factor(variable) || is.array(variable)){
+    #If no default rounding_degrees were given, suggest_rounding_degrees suggests them
+    if(is.null(rounding_degrees)){
+      rounding_degrees <- suggest_rounding_degrees(variable)
+    }
+
+    #... if they are still NULL, then c(1, 10, 100, 1000) is used as a default
+    if(is.null(rounding_degrees)){
+      rounding_degrees <- c(1, 10, 100, 1000)
+    }
+
     if(is.numeric(variable)){
       type <- "cont"
 
@@ -96,7 +118,7 @@ get_type <- function(variable,
         }
 
         #... or it is a rounded continuous variable:
-        if(sum(apply(outer(decompose_interval(interval = variable)[, "precise"], rounding_degrees[-1], '%%') == 0,
+        if(sum(apply(outer(decompose_interval(interval = variable)[, "precise"], setdiff(rounding_degrees, 1), '%%') == 0,
                      1, any), na.rm = TRUE)/
            length(variable[!is.na(variable)]) > 0.5){
           type <- "roundedcont"
@@ -117,32 +139,47 @@ get_type <- function(variable,
       # Observed 0s shall not be counted as rounded,
       #because otherwise semi-continuous variables might be considered to be rounded-continuous.
 
-      if((sum(apply(outer(decompose_interval(interval = variable)[, "precise"], rounding_degrees[-1], '%%') == 0,
+      if((sum(apply(outer(decompose_interval(interval = variable)[, "precise"], setdiff(rounding_degrees, 1), '%%') == 0,
                     1, any), na.rm = TRUE) - sum(variable == 0, na.rm = TRUE))/
         length(variable[!is.na(variable)]) > 0.5){
         type <- "roundedcont"
       }
 
+
       return(type)
 
     }
 
-    #checking the length of the table to be larger than two is not sufficient
-    #to get a real categoriacal variable, because for a (real) continious variable
-    #the length of the table is equal to the length of the variable
-    #(what will be in general larger than two...)
-    #Therefore it will be checked if the table has more than two entries AND
-    #wheter the varriable is a factor.
-    if(is.factor(variable) || length(table(variable)) > 2){
+    if(type == "unknown"){
       type <- "categorical"
-      if(is.ordered(variable)){
-        type <- "ordered_categorical"
-      }
-
-      return(type)
     }
 
   }else{
+
+    if(is_interval(variable)){
+
+      #If no default rounding_degrees were given, suggest_rounding_degrees suggests them
+      if(is.null(rounding_degrees)){
+        rounding_degrees <- suggest_rounding_degrees(variable)
+      }
+
+      #... if they are still NULL, then c(1, 10, 100, 1000) is used as a default
+      if(is.null(rounding_degrees)){
+        rounding_degrees <- c(1, 10, 100, 1000)
+      }
+
+      type <- "interval"
+      #if more than 50% of the precise part of an interval variable is rounded,
+      #the whole variable is considered to be a rounded continous variable
+      tmp <- decompose_interval(interval = variable)[, "precise"]
+      if(sum(!is.na(tmp)) == 0) return(type)
+      if(sum(apply(outer(tmp, setdiff(rounding_degrees, 1), '%%') == 0,
+                   1, any), na.rm = TRUE)/
+         length(tmp[!is.na(tmp)]) > 0.5){
+        type <- "roundedcont"
+      }
+      return(type)
+    }
 
     if(ncol(variable) == 1){
       ret <- get_type(variable[, 1], rounding_degrees = rounding_degrees)
@@ -157,12 +194,46 @@ get_type <- function(variable,
       return(ret)
     }
   }
+  return(type)
+}
+
+#' Get the mode
+#'
+#' This function calculates the mode (most frequent observation) of a vector.
+#' @param x A vector
+#' @references Adopted from stackoverflow.com/questions/2547402: "is there a built in function for finding the mode"
+#' from user "Ken Williams".
+#' @return The mode of x as a numeric value.
+Mode <- function(x){
+  ux <- unique(x[!is.na(x)])
+  return(ux[which.max(tabulate(match(x, ux)))])
+}
+
+#' Helps the user to make a list of heaps.
+#'
+#' In \code{hmi} the user can add a list of heaps. This function gives him a framework
+#' with suggestions. Of course the user can make changes by herself/himself afterwards.
+#' For example, the function might wrongly classify a variable to be heaped.
+#' @param data the data.frame also passed to \code{hmi}.
+#' @return a list with suggested heaps. Each list element has the name of a heaped variable
+#' in the data.frame. The elements contain a single numeric denoting the heap found for that variable.
+#' @export
+list_of_spikes_maker <- function(data){
+  if(!is.data.frame(data)) stop("We need the data in the data.frame format!")
+  ret <- list()
+  for(l2 in colnames(data)){
+    if(get_type(data[, l2]) == "semicont"){
+      ret[[l2]] <- Mode(data[, l2])
+    }
+
+  }
+  return(ret)
 }
 
 #' Helps the user to make a list of types.
 #'
 #' In \code{hmi} the user can add a list of types. This function gives him a framework
-#' with suggestions. Of course he can changes on his own afterwards.
+#' with suggestions. Of course the user can make changes by herself/himself afterwards.
 #' For example, if a continuous variable as only two observations left, then get_type
 #' interpret this as a binary variable and not a continuous.
 #' @param data the data.frame also passed to \code{hmi}.
@@ -171,11 +242,153 @@ get_type <- function(variable,
 #' in the data.frame. The elements contain a single character denoting the type of the variable.
 #' See \code{get_type} for details about the variable types.
 #' @export
-list_of_types_maker <- function(data, rounding_degrees = c(1, 10, 100, 1000)){
+list_of_types_maker <- function(data, rounding_degrees = NULL){
 
   if(!is.data.frame(data)) stop("We need the data in the data.frame format!")
-  ret <- lapply(data, get_type, rounding_degrees = rounding_degrees)
 
+  rounding_degrees_tmp <- rounding_degrees
+
+  ret <- list()
+
+  for(l2 in colnames(data)){
+    if(is.list(rounding_degrees)){
+      rounding_degrees_tmp <- rounding_degrees[[l2]]
+    }
+
+    ret[[l2]] <- get_type(data[, l2], rounding_degrees = rounding_degrees_tmp)
+  }
+
+  return(ret)
+}
+
+#' Function to get all factors
+#'
+#' Function to get all factors (not limited to prime factors) of an integer.
+#' @param x An integer.
+#' @return A numeric vector with the factors
+#' @references based on stackoverflow.com/questions/6424856 "R Function for returning ALL factors"
+#'  answer by Chase
+factors <- function(x){
+  if(!is.numeric(x)) return(NA)
+  if(is.na(x)) return(NA)
+  if(x %% 1 != 0) return(NA)
+  x <- as.integer(x)
+  div <- seq_len(abs(x))
+  return(div[x %% div == 0L])
+}
+
+
+#' suggesting rounding degrees
+#'
+#' A function that suggests some rounding degrees of a continuous variable
+#' (classically formatted or as interval object)
+#' @param x A vector or \code{interval} object.
+suggest_rounding_degrees <- function(x){
+
+  if(!(is.vector(x) | is_interval(x))){
+    return(NULL)
+  }
+
+  if(is.factor(x)){
+    return(NULL)
+  }
+  variable <- decompose_interval(interval = x)[, "precise"]
+
+  tab <- table(unlist(sapply(variable, factors)))
+
+  if(length(tab) == 0){
+    return(NULL)
+  }else{
+
+    values <- as.numeric(names(tab))
+
+    #for later, only those values shall be considered if the observed number of indiduvials,
+    #rounded to this degree, exceeds the expected number at least by two.
+    #Example: from 10000 individuals, 2000 are expected to round to 5.
+    #If 4000 or more indivudials are observed 4 is considered to be a possible rounding degree
+    candidates_values <- values[values * tab/ length(x) > 2]
+    if(length(candidates_values) == 0) return(NULL)
+    sorted_candidates_values <- sort(candidates_values, decreasing = TRUE)
+    #now check the relative frequencies of these rounding degrees...
+    tmp <- outer(variable, sorted_candidates_values, '%%') == 0
+    colnames(tmp) <- sorted_candidates_values
+
+    rel_rounding_freqs <- colSums(tmp, na.rm = TRUE)/sum(!is.na(variable))
+    current_percent <- 0
+    for(i in 1:ncol(tmp)){
+      #...if a rounding degree does provide less then 10 percent new people rounded to this degree,
+      #it is considered to be a neglictible rounding degree
+      if(rel_rounding_freqs[i] - current_percent < 0.1){
+        rel_rounding_freqs[i] <- NA
+      }else{
+        #Here we implicity assume, that smaller rounding degrees are a factor of the previous ones
+        #(eg. 10 as a factor of 100 and 1000).
+        #if multiple bases (eg. 10 and 7) and there follow ups (like 100, 1000, 14, 21)
+        #should be found, these bases would beed an own current_percent value.
+        #Currently this seems to be an overkill.
+        current_percent <- rel_rounding_freqs[i]
+      }
+    }
+
+    suggested_rounding_degrees <- c(1, sort(sorted_candidates_values[!is.na(rel_rounding_freqs)]))
+    if(get_type(variable, rounding_degrees = suggested_rounding_degrees) == "roundedcont"){
+      return(suggested_rounding_degrees)
+    }else{
+      return(NULL)
+    }
+  }
+}
+
+
+#' Helps the user to make a list of rounding degrees
+#'
+#' In \code{hmi} the user can add a list of rounding degrees. This function gives him a framework
+#' with suggestions. Of course the user can make changes by herself/himself afterwards.
+#' For example, the function might wrongly classify a variable to be heaped or selects
+#' unwanted rounding degrees.
+#' @param data the data.frame also passed to \code{hmi}.
+#' @return a list with suggested rounding degrees. Each list element has the name
+#' of a rounded continuous variable in the data.frame. The elements contain a
+#' numeric vector with the rounding degrees found for that variable.
+#' @export
+list_of_rounding_degrees_maker <- function(data){
+  if(!is.data.frame(data)) stop("We need the data in the data.frame format!")
+  ret <- list()
+
+  for(l2 in colnames(data)){
+
+    variable <- decompose_interval(interval = data[, l2])[, "precise"]
+    suggested_rounding_degrees <- suggest_rounding_degrees(variable)
+    if(get_type(variable, rounding_degrees = suggested_rounding_degrees) == "roundedcont"){
+      ret[[l2]] <- suggested_rounding_degrees
+    }
+  }
+  return(ret)
+}
+
+
+#' Helps the user to make a list of rounding formulas for the rounding degress
+#'
+#' In \code{hmi} the user can add a list of heaps. This function gives him a framework
+#' with suggestions. Of course the user can make changes by herself/himself afterwards.
+#' For example, the function might wrongly classify a variable to be heaped.
+#' @param data the data.frame also passed to \code{hmi}.
+#' @param default A default formula used for every rounded variable.
+#' @return a list with suggested rounding degree formulas. Each list element has the name
+#' of a rounded continuous variable in the data.frame. The elements contain a
+#' very general rounding degree formula.
+#' @export
+list_of_rounding_formulas_maker <- function(data, default = ~ .){
+  if(!is.data.frame(data)) stop("We need the data in the data.frame format!")
+  ret <- list()
+
+  for(l2 in colnames(data)){
+    variable <- decompose_interval(interval = data[, l2])[, "precise"]
+    suggested_rounding_degrees <- suggest_rounding_degrees(variable)
+    if(get_type(variable, rounding_degrees = suggested_rounding_degrees) == "roundedcont"){
+      ret[[l2]] <- stats::formula(default)
+    }
+  }
   return(ret)
 }
 
@@ -261,11 +474,16 @@ hmi_pool <- function(mids, analysis_function){
 #' the regression parameters explaining the logged income,
 #' the regression parameters explaining the rounding degree
 #' and the variance parameter).
-#' @param X_in_negloglik The data.frame of covariates.
+#' @param X_in_negloglik The data.frame of covariates explaining Y, the observed target variable.
+#' It has to has n rows (with n being the number of precise, imprecise and missing observations).
+#' @param PSI_in_negloglik The data.frame of covariates explaining G, the latent rounding tendency.
+#' Without the target variable.
+#' @param vars_in_psi A vector with the names of the variables that should be used in PSI
+#' (the variables explaning the latent rounding tendency G), without the intercept and Y.
 #' @param y_precise_stand A vector of the precise (and standardized) observations from the target variable.
 #' @param lower_bounds The lower bounds of an interval variable.
 #' @param upper_bounds The upper bounds of an interval variable.
-#' @param my_p This vector is the indicator of the (highest possible) rounding degree for an observation.
+#' @param my_g This vector is the indicator of the (highest possible) rounding degree for an observation.
 #' This parameter comes directly from the data.
 #' @param sd_of_y_precise The scalar with the value equal to the standard deviation of the target variable.
 #' @param indicator_precise A boolean Vector indicating whether the value in the original target
@@ -282,9 +500,11 @@ hmi_pool <- function(mids, analysis_function){
 #' @return An integer equal to the (sum of the) negative log-likelihood contributions (of the observations)
 negloglik <- function(para,
                       X_in_negloglik,
+                      PSI_in_negloglik,
+                      vars_in_psi,
                       y_precise_stand,
                       lower_bounds = NA, upper_bounds = NA,
-                      my_p, sd_of_y_precise,
+                      my_g, sd_of_y_precise,
                       indicator_precise,
                       indicator_imprecise,
                       indicator_outliers,
@@ -294,23 +514,26 @@ negloglik <- function(para,
   upper <- ifelse(is.na(upper_bounds), Inf, upper_bounds)
 
   # the first parameters are the thresholds for the rounding degree
-  thresholds <- para[1:(length(rounding_degrees) - 1)]
-
+  thresholds <- para[grep("^threshold", names(para))]
   # the regression coefficients beta defining mean2 - the expected value of log(Y)
   # (see eq (2) in Drechsler, Kiesl & Speidel, 2015).
-  # They also appear in mean1 (the expected value of G).
+  # They might also appear in mean1 (the expected value of G).
   #The intercept is not part of the maximazition, as due to standardizations of y and x,
   #its value is exactly 1.
   #If there is only an intercept variable in X, there are no coefficients to be estimated.
   if(ncol(X_in_negloglik) == 1){
     reg_coefs <- matrix(1, ncol = 1)
   }else{
-    reg_coefs <- matrix(c(1, para[length(rounding_degrees):(length(para) - 2)]), ncol = 1)
+    reg_coefs <- matrix(para[grep("^coef_y_on_x", names(para))], ncol = 1)
   }
 
+  G_coefs <- matrix(para[grep("^coef_g_on_psi", names(para))], ncol = 1)
 
-  gamma1 <- para[length(para) - 1] #the gamma1 from eq (3)
-  sigmax <- para[length(para)] # the (residual) variance for log(Y) (see eq (3) in Drechsler, Kiesl & Speidel, 2015)
+  gamma1 <-  para[grep("^gamma1", names(para))] #the gamma1 from eq (3)
+  if(length(gamma1) == 0){
+    gamma1 <- 0
+  }
+  sigmax <- para[grep("^sigma", names(para))] # the (residual) variance for log(Y) (see eq (3) in Drechsler, Kiesl & Speidel, 2015)
 
   if(is.unsorted(thresholds)) return(1e50) # make sure that threshholds are increasing
   if(sigmax <= 0) return(1e50) # the residual variance has to be positive
@@ -320,7 +543,8 @@ negloglik <- function(para,
 
   #the mean for G (see eq (2) in Drechsler, Kiesl & Speidel, 2015)
   individual_means_for_g <- gamma1 *
-    (as.matrix(X_in_negloglik[indicator_precise, , drop = FALSE][!indicator_outliers, , drop = FALSE]) %*% reg_coefs)
+    (as.matrix(X_in_negloglik[indicator_precise, , drop = FALSE][!indicator_outliers, , drop = FALSE]) %*% reg_coefs) +
+    as.matrix(PSI_in_negloglik[, vars_in_psi, drop = FALSE][!indicator_outliers, , drop = FALSE]) %*% G_coefs
 
   #the mean for log(Y) (see eq (2) in Drechsler, Kiesl & Speidel, 2015)
   individual_means_for_y <- as.matrix(X_in_negloglik) %*% reg_coefs
@@ -337,8 +561,8 @@ negloglik <- function(para,
   sigma_for_y <- sqrt(sigma[2, 2])
 
   #get the likelihood contributions of the imprecise observations
-  sum_likelihood_imprecise_obs <- sum(log(contributions4intervals(lower = lower,
-                                                                  upper = upper,
+  sum_likelihood_imprecise_obs <- sum(log(contributions4intervals(lower_bounds = lower,
+                                                                  upper_bounds = upper,
                                                                   mymean = individual_means_for_y[indicator_imprecise],
                                                                   mysd = sigma_for_y)))
 
@@ -375,10 +599,15 @@ negloglik <- function(para,
                                                                 cdf = pbivnormX, rho = rho))
   }
 
-  merged <- cbind(likelihood_contributions_heaped, my_p[!indicator_outliers])
+  merged <- cbind(likelihood_contributions_heaped, my_g[!indicator_outliers])
 
+  #Sum up the likelihood contributions according to the rounding degree:
+  #For observations rounded to the first rounding degree only the first likelihoodcontribution is considered
+  #For observations rounded to the fourth rounding degree, the first four contributions are added up.
+  # Observations with no rounding, are excluded.
   result_try <- apply(merged, 1, function(x) sum(x[1:x[length(x)]]))
   result_try[is.na(result_try)] <- 0
+  result_try <- result_try[my_g[!indicator_outliers] != 0]
   # Sum up the likelihood contributions (see eq (5) in Drechsler, Kiesl & Speidel, 2015)
   sum_likelihood_heaped_obs <- sum(log(result_try), na.rm = TRUE)
 
@@ -397,19 +626,22 @@ negloglik <- function(para,
 #' (the regression parameters explaining the logged income,
 #' and the variance parameter).
 #' @param X the data.frame of covariates.
-#' @param lower the lower bound of an interval variable.
-#' @param upper the upper bound of an interval variable.
+#' @param lower_bounds the lower bound of an interval variable.
+#' @param upper_bounds the upper bound of an interval variable.
 #' @references Joerg Drechsler, Hans Kiesl, Matthias Speidel (2015):
 #' "MI Double Feature: Multiple Imputation to Address Nonresponse and Rounding Errors in Income Questions",
 #' Austrian Journal of Statistics, Vol. 44, No. 2, \url{http://dx.doi.org/10.17713/ajs.v44i2.77}
 #' @return An integer equal to the (sum of the) negative log-likelihood contributions (of the observations)
-negloglik2_intervalsonly <- function(para, X, lower, upper){
+negloglik2_intervalsonly <- function(para, X, lower_bounds, upper_bounds){
 
   # the regression coefficients beta defining mean2 - the expected value of log(Y)
   # (see eq (2) in Drechsler, Kiesl & Speidel, 2015).
   reg_coefs <- matrix(para[1:(length(para) - 1)], ncol = 1)
 
   sigmax <- para[length(para)]
+
+  #ascertain that a degenerated variance will not be considered as optimum
+  if(sigmax <= 0) return(1e50)
   # the variance for log(Y) (see eq (3) in Drechsler, Kiesl & Speidel, 2015)
 
   n <- nrow(X)
@@ -426,19 +658,21 @@ negloglik2_intervalsonly <- function(para, X, lower, upper){
   sigma2 <- sigmax
 
   #get the likelihood contributions of the imprecise observations
-  interval_obs <- !is.na(lower)
-  sum_likelihood_imprecise_obs <- sum(log(contributions4intervals(lower = lower[interval_obs],
-                                                                   upper = upper[interval_obs],
-                                                                   mymean = mean2[interval_obs],
-                                                                   mysd = sigma2)))
+  interval_obs <- !is.na(lower_bounds)
+  tmp <- contributions4intervals(lower_bounds = lower_bounds[interval_obs],
+                                 upper_bounds = upper_bounds[interval_obs],
+                                 mymean = mean2[interval_obs],
+                                 mysd = sigma2)
+  if(any(tmp == 0)) return(1e50)
+  sum_likelihood_imprecise_obs <- sum(log(tmp))
   return(-sum_likelihood_imprecise_obs) # notice the minus
 }
 
 #' get the likelihood contributions of interval data
 #'
 #' This function calculates the likelihood contributions of interval data
-#' @param lower a vector with the lower bounds of an interval covariate.
-#' @param upper a vector with the upper bounds of an interval covariate.
+#' @param lower_bounds a vector with the lower bounds of an interval covariate.
+#' @param upper_bounds a vector with the upper bounds of an interval covariate.
 #' @param mymean a numeric for the expected value of the normal distribution
 #' (which is one of the parameters trying to be optimized
 #' so that the likelihood becomes maximized)
@@ -446,10 +680,10 @@ negloglik2_intervalsonly <- function(para, X, lower, upper){
 #' (which is one of the parameters trying to be optimized
 #' so that the likelihood becomes maximized)
 #' @return a vector giving the likelihood contributions of the interval data.
-contributions4intervals <- function(lower, upper, mymean, mysd){
+contributions4intervals <- function(lower_bounds, upper_bounds, mymean, mysd){
 
-  ret <- stats::pnorm(upper, mean = mymean, sd = mysd) -
-    stats::pnorm(lower, mean = mymean, sd = mysd)
+  ret <- stats::pnorm(upper_bounds, mean = mymean, sd = mysd) -
+    stats::pnorm(lower_bounds, mean = mymean, sd = mysd)
 
   return(ret)
 }
@@ -547,13 +781,14 @@ sampler <- function(elements, Sigma){
 #' @param constant_variables A Boolean-vector of length equal to the number of columns in the data set
 #' specifying whether a variable is a constant variable (eg. an intercept variable) or not.
 #' @param variable_names_in_data A character-vector with the column names of the data set.
+#' @param data The data.frame the formula belongs to.
 #' @return A list with the names of the target variable, the intercept variable,
 #' the fixed and random effects covariates (which includes the name of the target variable),
 #' the variables with interactions and the cluster id variable.\cr
 #' If some of them don't exist, they get the value "".
 #' @export
 extract_varnames <- function(model_formula = NULL, constant_variables,
-                             variable_names_in_data){
+                             variable_names_in_data, data){
 
 
   # Set up default values for key variables like the target variable, the clusterID,
@@ -571,17 +806,17 @@ extract_varnames <- function(model_formula = NULL, constant_variables,
       model_formula <- stats::formula(model_formula)
     }
 
-    variable_names_in_formula <- all.vars(stats::terms(model_formula))
+    variable_names_in_formula <- all.vars(stats::terms(model_formula, data = data))
 
     #looking for possible interactions
-    interactions <- grep(":", x = attr(stats::terms(model_formula), "term.labels"),
+    interactions <- grep(":", x = attr(stats::terms(model_formula, data = data), "term.labels"),
                          value = TRUE)
     if(length(interactions) == 0){
       interactions <- ""
     }
 
     # ----------Target variable
-    target_varname_full <- as.character(model_formula)[2]
+    target_varname_full <- all.vars(stats::update(model_formula, . ~ 1))
 
     #check if the formula contains any functions like "log(y)" in log(y) ~ x.
     target_varname <- gsub(".*\\((.*)\\).*", "\\1", target_varname_full)
@@ -642,9 +877,9 @@ extract_varnames <- function(model_formula = NULL, constant_variables,
 
     # ---------X variables
 
-    fixedeffects_varname <- all.vars(stats::delete.response(stats::terms(lme4::nobars(model_formula))))
+    fixedeffects_varname <- all.vars(stats::delete.response(stats::terms(lme4::nobars(model_formula), data = data)))
     # --check if intercept is present
-    fixed_intercept_exists <- attributes(stats::delete.response(stats::terms(lme4::nobars(model_formula))))$intercept == 1
+    fixed_intercept_exists <- attributes(stats::delete.response(stats::terms(lme4::nobars(model_formula), data = data)))$intercept == 1
 
     # --remove cluster ID from the X-variables
     # (but, if model_formula was specified correctly it shouldn't be there anyway)
@@ -728,7 +963,9 @@ extract_varnames <- function(model_formula = NULL, constant_variables,
   }
 
   # Note: there can be only one intercept variable in the data set.
-
+  if(is.null(target_varname) || target_varname == "."){
+    target_varname <- NULL
+  }
   ret <- list(target_varname = target_varname,
               intercept_varname = intercept_varname,
               fixedeffects_varname = c(target_varname, fixedeffects_varname),
@@ -929,8 +1166,9 @@ is_interval <- function(x){
 #' @param ... arguments to be passed to \code{as.data.frame}.
 #' @return a data.frame containing x as a character
 as.data.frame.interval <- function(x, ...){
-  tmp <- as.data.frame(as.character(x), ...)
+  tmp <- as.data.frame(rep(NA, length(x)), ...)
   colnames(tmp) <- colnames(x)
+  tmp[, 1] <- x
   return(tmp)
 }
 
@@ -965,7 +1203,7 @@ split_interval <- function(interval){
 #' (e.g. "1850.23;1850.23" into 1850.23),
 #' imprecise observations (e.g. "1800;1900") and
 #' missing observations ("-Inf;Inf" into NA)
-#' @param interval an \code{interval} object of length n
+#' @param interval A vector, factor or optimally an \code{interval} object of length n
 #' (if it is something else, it is returned unchanged)
 #' @return A matrix with 5 columns.
 #' 1. A column "precise" for the precise observations
@@ -983,9 +1221,13 @@ split_interval <- function(interval){
 #' 4. A column "lower_general" with the lower bound values of all observations,
 #' without distinction between precise, imprecise or missing observations.
 #' c("2500;2500", "3000;4000", "-Inf;0", NA) will lead to c(2500, 3000, -Inf, -Inf)
-#' 5. A column "upper_general" with the upper bound values of all observations.
 #' c("2500;2500", "3000;4000", "-Inf;0", NA) will lead to c(2500, 4000, 0, Inf)
 decompose_interval <- function(interval){
+
+  if(!(is.vector(interval) | is.factor(interval) | is.numeric(interval)| is_interval(interval))){
+    stop("interval has to be a vector, factor, numeric or interval.")
+  }
+
   if(is.factor(interval)){
     interval <- as.character(interval)
   }
@@ -1078,6 +1320,10 @@ idf2interval <- function(idf){
 #' @param ylab A title for the y axis: see \code{title}.
 #' @param xlim Numeric vectors of length 2, giving the x coordinate ranges.
 #' @param ylim Numeric vectors of length 2, giving the y coordinate ranges.
+#' @param sort A character specifiying how the values should be sorted if only one variable is to be plotted.
+#' By default they are sorted according to their position in the data set.
+#' Currently, the only option to chose (\code{sort = "mostprecise_increasing"}) is to sort them by their length of the interval they represent,
+#' and within equal lengths increasing with the lower bound.
 #' @param ... graphical parameters such as \code{main}.
 #' @examples
 #' \dontrun{
@@ -1089,7 +1335,8 @@ idf2interval <- function(idf){
 #' @export
 plot.interval <- function(x = NULL, y = NULL, data = NULL, col = "black",
                           xlab = NULL, ylab = NULL,
-                          xlim = NULL, ylim = NULL, ...){
+                          xlim = NULL, ylim = NULL,
+                          sort = NULL, ...){
   myylab <- "y"
   myxlab <- "x"
   if(is.null(x) && is.null(y)){
@@ -1123,8 +1370,10 @@ plot.interval <- function(x = NULL, y = NULL, data = NULL, col = "black",
 
   if(is_interval(x)){
     x_split <- split_interval(x)
+    x_eps <- (xrange[2] - xrange[1])/500
   }else{
     x_split <- cbind(x, x)
+    x_eps <- 0.3
   }
 
   xrange <- range(x_split, na.rm = TRUE, finite = TRUE)
@@ -1135,11 +1384,18 @@ plot.interval <- function(x = NULL, y = NULL, data = NULL, col = "black",
   y_eps <- (yrange[2] - yrange[1])/500
   y_split <- y_split + rep(y_eps*c(-1, 1), each = nrow(y_split))
 
-  x_eps <- (xrange[2] - xrange[1])/500
+
   x_split <- x_split + rep(x_eps*c(-1, 1), each = nrow(x_split))
 
+  #replaces NAs by +- Inf
+  x_split[is.na(x_split[, 1]), 1] <- -Inf
+  x_split[is.na(x_split[, 2]), 2] <- Inf
+
+  y_split[is.na(y_split[, 1]), 1] <- -Inf
+  y_split[is.na(y_split[, 2]), 2] <- Inf
+
   #replace infinite values with values outside the range
-  y_split[is.infinite(y_split[, 1]), 1] <- yrange[1] - (yrange[2] - xrange[1])
+  y_split[is.infinite(y_split[, 1]), 1] <- yrange[1] - (yrange[2] - yrange[1])
   y_split[is.infinite(y_split[, 2]), 2] <- yrange[2] + (yrange[2] - yrange[1])
 
   x_split[is.infinite(x_split[, 1]), 1] <- xrange[1] - (xrange[2] - xrange[1])
@@ -1148,12 +1404,73 @@ plot.interval <- function(x = NULL, y = NULL, data = NULL, col = "black",
   if(!is.null(ylab)) myylab <- ylab
   if(!is.null(xlim)) xrange <- xlim
   if(!is.null(ylim)) yrange <- ylim
+
+  if(!is.null(sort)){
+    if(sort == "mostprecise_increasing"){
+      interval_lengths <- decompose_interval(y)[, "upper_general"] -
+        decompose_interval(y)[, "lower_general"]
+      #interval_lengths <- y_split[, 2] - y_split[, 1]
+      #step1 <- y_split[order(interval_lengths),, drop = FALSE]
+      y_split <- y_split[order(interval_lengths, y_split[, 1]),]
+      if(is.null(xlab)) myxlab <- "Index of sorted values"
+    }
+  }
+
+
+
   graphics::plot(0, pch = '', ylab = myylab, xlab = myxlab,
        xlim = xrange,
        ylim = yrange, ...)
-  graphics::rect(xleft = x_split[, 1], ybottom = y_split[, 1], xright = x_split[, 2], ytop = y_split[, 2],
+  graphics::rect(xleft = x_split[, 1], ybottom = y_split[, 1],
+                 xright = x_split[, 2], ytop = y_split[, 2],
        border = NA, col = col, ...)
 }
+
+#' Tabulating interval objects
+#'
+#' Function to tabulate interval objects
+#' @param x In its most save way, \code{x} is an object from class \code{interval}.
+#' @param ... Other parameters passed to \code{table}.
+#' @return A table.
+#' @export
+table <- function(x, ...) {
+  UseMethod('table', x)
+}
+
+
+#' @rdname table
+#' @export
+table.interval <- function(x, ...){
+  tab <- table(unclass(x), ...)
+  tmp <- decompose_interval(as.interval(names(tab)))
+  interval_lengths <- tmp[, "upper_general"] -
+    tmp[, "lower_general"]
+  tab <- tab[order(interval_lengths, tmp[, "lower_general"])]
+  return(tab)
+}
+
+#' @rdname table
+#' @export
+table.default <- function(x, ...) {
+  return(base::table(x, ...))
+}
+
+#' Tabulating only interval objects
+#'
+#' Function to only tabulate interval objects
+#' @param x In its most save way, \code{x} is an object from class \code{interval}.
+#' @param ... Other parameters passed to \code{table}.
+#' @return A table.
+#' @export
+table_interval <- function(x, ...){
+  tab <- table(unclass(x), ...)
+  tmp <- decompose_interval(as.interval(names(tab)))
+  interval_lengths <- tmp[, "upper_general"] -
+    tmp[, "lower_general"]
+  tab <- tab[order(interval_lengths, tmp[, "lower_general"])]
+  return(tmp)
+}
+
 
 #' Adding function
 #'
@@ -1246,15 +1563,16 @@ is.na.interval <- function(interval){
 #' @param rounding_degrees A numeric vector with the presumed rounding degrees.
 #' @return A n times p data.frame with the standardized versions of the numeric variables.
 #' @export
-stand <- function(X, rounding_degrees = c(1, 10, 100, 1000)){
+stand <- function(X, rounding_degrees = NULL){
   if(!is.data.frame(X)) stop("X has to be a data.frame.")
   types <- array(NA, dim = ncol(X))
   for(i in 1:length(types)){
-    types[i] <- get_type(X[, i, drop = FALSE], rounding_degrees = rounding_degrees)
+    types[i] <- get_type(X[, i], rounding_degrees = rounding_degrees)
   }
   need_stand_X <- types %in% c("cont", "count")
   X_stand <- X
-  X_stand[, need_stand_X] <- scale(X[, need_stand_X])
+  tmp <- scale(X[, need_stand_X])
+  X_stand[, need_stand_X] <- matrix(tmp, ncol = ncol(tmp)) # this avoids having attributes delivered by scale().
   return(X_stand)
 }
 
@@ -1334,11 +1652,17 @@ cleanup <- function(X, k = 10){
 #' @param fe A list with the decomposed elements of the \code{model_formula}.
 #' @param interaction_names A list with the names of the variables
 #' that have been generated as interaction variables
+#' @param list_of_types a list where each list element has the name of a variable
+#' in the data.frame. The elements have to contain a single character denoting the type of the variable.
+#' See \code{get_type} for details about the variable types.
+#' With the function \code{list_of_types_maker}, the user can get the framework for this object.
+#' In most scenarios this is should not be necessary.
+#' One example where it might be necessary is when only two observations
+#' of a continuous variable are left - because in this case \code{get_type}
+#' interpret is variable to be binary. Wrong is it in no case.
 #' @param NA_locator A n x p matrix localizing the missing values in the original
 #' dataset. The elements are TRUE if the original data are missing and FALSE if the
 #' are observed.
-#' @param list_of_types a list specifying the types of the variables.
-#' See \code{hmi} for details.
 #' @param nitt An integer defining number of MCMC iterations (see \code{MCMCglmm}).
 #' @param burnin burnin A numeric value between 0 and 1 for the desired percentage of
 #' Gibbs samples that shall be regarded as burnin.
@@ -1347,9 +1671,18 @@ cleanup <- function(X, k = 10){
 #' chains, that are only examined by few iterations (say less than 1000),
 #' the \code{geweke.diag} might fail to detect convergence. In such cases it is
 #' essential to look a chain free from autocorelation.
+#' @param pvalue A numeric between 0 and 1 denoting the threshold of p-values a variable in the imputation
+#' model should not exceed. If they do, they are excluded from the imputation model.
 #' @param mn An integer defining the minimum number of individuals per cluster.
 #' @param heap A numeric value saying to which value the data might be heaped.
-#' @param rounding_degrees A numeric vector with the presumed rounding degrees.
+#' Or a list with with such values and names identical to the variables with heaps
+#' (see \code{list_of_spikes_maker} for details.)
+#' @param rounding_degrees A numeric vector with the presumed rounding degrees. Or a list with rounding degrees,
+#' where each list element has the name of a rounded continuous variable. Such a list can be generated
+#' using \code{list_of_rounding_degrees_maker(data)}.
+#' @param rounding_formula A formula with the model formula for the latent rounding tendency G.
+#' Or a list with model formulas for G, where each list element has the name of a rounded continuous variable.
+#' Such a list can be generated
 #' @return A data.frame where the values, that have a missing value in the original
 #' dataset, are imputed.
 #' @export
@@ -1361,8 +1694,11 @@ imputationcycle <- function(data_before,
                             nitt,
                             burnin,
                             thin,
-                            mn, heap = 0,
-                            rounding_degrees = c(1, 10, 100, 1000)){
+                            pvalue = 0.2,
+                            mn,
+                            heap = 0,
+                            rounding_degrees = NULL,
+                            rounding_formula){
 
   if(!is.data.frame(data_before)){
     stop("data_before has the be a data.frame")
@@ -1510,13 +1846,20 @@ imputationcycle <- function(data_before,
     use_single_level <- fe$clID_varname == "" || !(fe$clID_varname %in% names(data_before)) ||
       ncol(tmp_Z) == 0
 
+    if(is.list(rounding_degrees)){
+      rounding_degrees_tmp <- rounding_degrees[[l2]]
+    }else{
+      rounding_degrees_tmp <- rounding_degrees
+    }
+
     if(tmp_type == "binary"){
       if(use_single_level){
 
         #print("Currently the single level model.")
         imp <- imp_binary_single(y_imp = data_before[, l2],
                                  X_imp = tmp_X,
-                                 rounding_degrees = rounding_degrees)
+                                 pvalue = pvalue,
+                                 rounding_degrees = rounding_degrees_tmp)
 
       }else{
 
@@ -1528,7 +1871,8 @@ imputationcycle <- function(data_before,
                                 nitt = nitt,
                                 burnin = burnin,
                                 thin = thin,
-                                rounding_degrees = rounding_degrees)
+                                pvalue = pvalue,
+                                rounding_degrees = rounding_degrees_tmp)
 
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol
@@ -1543,7 +1887,8 @@ imputationcycle <- function(data_before,
         #print("Currently the single level model.")
         imp <- imp_cont_single(y_imp = data_before[, l2],
                                X_imp = tmp_X,
-                               rounding_degrees = rounding_degrees)
+                               pvalue = pvalue,
+                               rounding_degrees = rounding_degrees_tmp)
 
       }else{
 
@@ -1555,7 +1900,8 @@ imputationcycle <- function(data_before,
                               nitt = nitt,
                               burnin = burnin,
                               thin = thin,
-                              rounding_degrees = rounding_degrees)
+                              pvalue = pvalue,
+                              rounding_degrees = rounding_degrees_tmp)
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol
         chains[[l2]]$VCV <- tmp$VCV
@@ -1564,15 +1910,21 @@ imputationcycle <- function(data_before,
     }
 
     if(tmp_type == "semicont"){
-
+      if(is.list(heap)){
+        heap_tmp <- heap[[l2]]
+      }else{
+        heap_tmp <- heap
+      }
 
       if(use_single_level){
+
 
         #print("Currently the single level model.")
         imp <- imp_semicont_single(y_imp = data_before[, l2],
                                    X_imp = tmp_X,
-                                   heap = heap,
-                                   rounding_degrees = rounding_degrees)
+                                   heap = heap_tmp,
+                                   pvalue = pvalue,
+                                   rounding_degrees = rounding_degrees_tmp)
       }else{
 
         #print("Currently the multilevel model.")
@@ -1580,11 +1932,12 @@ imputationcycle <- function(data_before,
                                   X_imp = tmp_X,
                                   Z_imp = tmp_Z,
                                   clID = data_before[, fe$clID_varname],
-                                  heap = heap,
+                                  heap = heap_tmp,
                                   nitt = nitt,
                                   burnin = burnin,
                                   thin = thin,
-                                  rounding_degrees = rounding_degrees)
+                                  pvalue = pvalue,
+                                  rounding_degrees = rounding_degrees_tmp)
 
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol
@@ -1596,11 +1949,18 @@ imputationcycle <- function(data_before,
 
 
     if(tmp_type == "roundedcont"){
-
       #yet, we don't have a multilevel imputation for rounded incomes
-      imp <- imp_roundedcont(y = data_before[, l2],
+
+      #Set up the data.frame including the variable explaning G, the latent rounding tendency
+      vars_usable <- rounding_formula[[l2]]
+      vars_usable <- vars_usable[vars_usable %in% colnames(data_before)]
+      PSI <- data_before[, vars_usable, drop = FALSE]
+
+      imp <- imp_roundedcont(y_df = data_before[, l2, drop = FALSE],
                              X = tmp_X,
-                             rounding_degrees = rounding_degrees)
+                             PSI = PSI,
+                             pvalue = pvalue,
+                             rounding_degrees = rounding_degrees_tmp)
 
     }
 
@@ -1609,7 +1969,8 @@ imputationcycle <- function(data_before,
       #yet, we don't have a multilevel imputation for interval data
       imp <- imp_interval(y_imp = data_before[, l2],
                           X_imp = tmp_X,
-                          rounding_degrees = rounding_degrees)
+                          pvalue = pvalue,
+                          rounding_degrees = rounding_degrees_tmp)
 
     }
 
@@ -1619,12 +1980,17 @@ imputationcycle <- function(data_before,
       if(use_single_level){
 
         #print("Currently the single level model.")
-        imp <- imp_count_single(y_imp = data_before[, l2],
+        tmp <- imp_count_single(y_imp = data_before[, l2],
                                 X_imp = tmp_X,
                                 nitt = nitt,
                                 burnin = burnin,
                                 thin = thin,
-                                rounding_degrees = rounding_degrees)
+                                pvalue = pvalue,
+                                rounding_degrees = rounding_degrees_tmp)
+
+        imp <- tmp$y_ret
+        chains[[l2]]$Sol <- tmp$Sol
+        chains[[l2]]$VCV <- tmp$VCV
 
 
       }else{
@@ -1637,7 +2003,8 @@ imputationcycle <- function(data_before,
                                nitt = nitt,
                                burnin = burnin,
                                thin = thin,
-                               rounding_degrees = rounding_degrees)
+                               pvalue = pvalue,
+                               rounding_degrees = rounding_degrees_tmp)
 
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol
@@ -1655,7 +2022,8 @@ imputationcycle <- function(data_before,
         #print("Currently the single level model.")
         imp <- imp_cat_single(y_imp = data_before[, l2],
                               X_imp = tmp_X,
-                              rounding_degrees = rounding_degrees)
+                              pvalue = pvalue,
+                              rounding_degrees = rounding_degrees_tmp)
 
       }else{
 
@@ -1667,7 +2035,8 @@ imputationcycle <- function(data_before,
                              nitt = nitt,
                              burnin = burnin,
                              thin = thin,
-                             rounding_degrees = rounding_degrees)
+                             pvalue = pvalue,
+                             rounding_degrees = rounding_degrees_tmp)
 
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol
@@ -1682,7 +2051,8 @@ imputationcycle <- function(data_before,
         #print("Currently the single level model.")
         imp <- imp_orderedcat_single(y_imp = data_before[, l2],
                                      X_imp = tmp_X,
-                                     rounding_degrees = rounding_degrees)
+                                     pvalue = pvalue,
+                                     rounding_degrees = rounding_degrees_tmp)
 
       }else{
 
@@ -1694,7 +2064,8 @@ imputationcycle <- function(data_before,
                                     nitt = nitt,
                                     burnin = burnin,
                                     thin = thin,
-                                    rounding_degrees = rounding_degrees)
+                                    pvalue = pvalue,
+                                    rounding_degrees = rounding_degrees_tmp)
 
         imp <- tmp$y_ret
         chains[[l2]]$Sol <- tmp$Sol

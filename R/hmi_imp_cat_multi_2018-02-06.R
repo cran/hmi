@@ -24,7 +24,9 @@
 #' Gibbs samples that shall be regarded as burnin.
 #' @param thin An integer to set the thinning interval range. If thin = 1,
 #' every iteration of the Gibbs-sampling chain will be kept. For highly autocorrelated
-#' chains, that are only examined by few iterations (say less than 1000),
+#' chains, that are only examined by few iterations (say less than 1000).
+#' @param pvalue A numeric between 0 and 1 denoting the threshold of p-values a variable in the imputation
+#' model should not exceed. If they do, they are excluded from the imputation model.
 #' @param rounding_degrees A numeric vector with the presumed rounding degrees.
 #' @return A list with 1. 'y_ret' the n x 1 data.frame with the original and imputed values.
 #' 2. 'Sol' the Gibbs-samples for the fixed effects parameters.
@@ -36,6 +38,7 @@ imp_cat_multi <- function(y_imp,
                       nitt = 22000,
                       burnin = 2000,
                       thin = 20,
+                      pvalue = 0.2,
                       rounding_degrees = c(1, 10, 100, 1000)){
 
   if(min(table(y_imp)) < 2) {
@@ -65,125 +68,159 @@ imp_cat_multi <- function(y_imp,
   number_clusters <- length(table(clID))
 
 
-  # ----------------- starting model to get categorical variables as dummies
-  # and for eliminating linear dependent variables.
+  # ----------- set up a maximal model matrix with all possible relevant (dummy) variables -----
+  # In the imputation model only actually relevant (dummy) variables shall be present.
+  # THis is done by setting up a mirror of the initial model matrix.
+  # Then step by step this model matrix is reduced to all actually relevant (dummy) variables.
+  # This reduction is based on models using the observed data.
+  # The last step prior to the imputation-parameters estimation is to restrict the initial mode matrix
+  # to those variables, left in the reduced mirror model matrix.
   ph <- sample_imp(y_imp)[, 1]
-  YX_0_all <- data.frame(target = ph)
-  X2 <- stats::model.matrix(~ 0 + ., data = X)
-  xnames_0 <- paste("X", 1:ncol(X2), sep = "")
-  YX_0_all[xnames_0] <- X2
-  YX_0_sub <- YX_0_all[!missind, , drop = FALSE]
 
-  reg_YX_1_all <- stats::lm(as.numeric(target) ~ 1 +. , data =  YX_0_all)
-  X3 <- stats::model.matrix(reg_YX_1_all)[, !is.na(stats::coef(reg_YX_1_all)), drop = FALSE]
+  YZ <- data.frame(target = ph, Z)
+  #remove intercept variable
+  YZ <- YZ[, get_type(YZ) != "intercept", drop = FALSE]
 
-  YX_1_all <- data.frame(target = ph)
-  xnames_1 <- paste("X", 1:ncol(X3), sep = "")
-  YX_1_all[xnames_1] <- X3
-  YX_1_sub <- YX_1_all[!missind, , drop = FALSE]
+  Z2 <- stats::model.matrix(stats::lm("target ~ 1 + .", data = YZ))
 
+  tmp_0_all <- data.frame(target = ph)
+  xnames_1 <- paste("X", 1:ncol(X), sep = "")
+  znames_1 <- paste("Z", 1:ncol(Z2), sep = "")
 
-  # -------- better model to remove insignificant variables
-  reg_YX_1_all <- nnet::multinom(target ~ 0 + ., data =  YX_1_all, trace = FALSE)
-  reg_YX_1_sub <- nnet::multinom(target ~ 0 + ., data =  YX_1_sub, trace = FALSE)
+  tmp_0_all[, xnames_1] <- X
+  tmp_0_all[, znames_1] <- Z2
+  tmp_0_all[, "clID"] <- clID
 
-  X_0_all <- stats::model.matrix(reg_YX_1_all)
-  # ---------- remove insignificant variables
-  # -- check for insignificance
-  insignificant <- array(dim = length(reg_YX_1_sub$coefnames))
-  for(i in 1:length(insignificant)){
-    reg_YX_1_sub_test <- nnet::multinom(paste("target ~ 0 + . -",  reg_YX_1_sub$coefnames[i]),
-                                        data =  YX_1_sub, trace = FALSE)
-    insignificant[i] <- tryCatch(
-      {
-      insignificant[i] <- lmtest::lrtest(reg_YX_1_sub, reg_YX_1_sub_test)[[5]][2] > 0.1
-      },
-      error = function(cond){
-        insignificant[i] <- FALSE
-      },
-      warning = {
+  tmp_formula <- paste("target ~ 0 +",
+                       paste(xnames_1, collapse = "+"))
 
-      },
-      finally = {
-      }
-    )
-  }
+  # If both, an intercept variable and a categorical variable are present in the data,
+  # One variable in the model is redundant. This is handled later in the code, so here
+  # the default message from lmer is bothering and therefore suppressed.
+  oldw <- getOption("warn")
+  options(warn = -1)
+  suppressMessages(reg_1_all <- nnet::multinom(stats::formula(tmp_formula), data = tmp_0_all,
+                                               trace = FALSE))
+  options(warn = oldw)
 
-  while(any(insignificant)){
-    X_0_all <- stats::model.matrix(reg_YX_1_all)[, !insignificant, drop = FALSE]
+  X_model_matrix_1_all <- stats::model.matrix(reg_1_all)
+  xnames_1 <- paste("X", 1:ncol(X_model_matrix_1_all), sep = "")
+  colnames(X_model_matrix_1_all) <- xnames_1
 
-    YX_1_all <- data.frame(target = ph)
-    xnames_1 <- paste("X", 1:ncol(X_0_all), sep = "")
-    YX_1_all[xnames_1] <- X_0_all
-    YX_1_sub <- YX_1_all[!missind, , drop = FALSE]
+  tmp_0_all <- data.frame(target = ph)
+  tmp_0_all[, xnames_1] <- X_model_matrix_1_all
+  tmp_0_all[, znames_1] <- Z2
+  tmp_0_all[, "clID"] <- clID
 
-    reg_YX_1_all <- nnet::multinom(target ~ 0 + ., data =  YX_1_all, trace = FALSE)
-    reg_YX_1_sub <- nnet::multinom(target ~ 0 + ., data =  YX_1_sub, trace = FALSE)
+  #From this initial model matrix X_model_matrix_1_all
+  #now step by step irrelavant variables are removed.
+  X_model_matrix_1_sub <- X_model_matrix_1_all[!missind, , drop = FALSE]
 
-    # -- update insignificance test
-    insignificant <- array(dim = length(reg_YX_1_sub$coefnames))
-    for(i in 1:length(insignificant)){
-      reg_YX_1_sub_test <- nnet::multinom(paste("target ~ 0 + .", "-", reg_YX_1_sub$coefnames[i]),
-                                          data =  YX_1_sub,
-                                          trace = FALSE)
-      insignificant[i] <- tryCatch(
-        {
-          insignificant[i] <- lmtest::lrtest(reg_YX_1_sub, reg_YX_1_sub_test)[[5]][2] > 0.1
-        },
-        error = function(cond){
-          insignificant[i] <- FALSE
-        },
-        warning = {
+  # The first step of the reduction is to remove variables having a non-measurable effect
+  # (e.g. due to colinearity) on y.
+  # tmp_1 shall include the covariates (like X_model_matrix) and additionally the target variable
+  ph_sub <- ph[!missind]
+  tmp_1_sub <- data.frame(target = ph_sub)
+  tmp_1_sub[, xnames_1] <- X_model_matrix_1_sub
+  tmp_1_sub[, znames_1] <- Z2[!missind, , drop = FALSE]
+  tmp_1_sub[, "clID"] <- clID[!missind]
 
-        },
-        finally = {
-        }
-      )
+  tmp_formula <- paste("target ~ 0 +",
+                       paste(xnames_1, collapse = "+"))
+
+  oldw <- getOption("warn")
+  options(warn = -1)
+  suppressMessages(reg_1_sub <- nnet::multinom(stats::formula(tmp_formula), data = tmp_1_sub,
+                                            trace = FALSE))
+  options(warn = oldw)
+
+  #remove unneeded variables
+  tmp <- stats::coefficients(reg_1_sub)
+  X_model_matrix_1_sub <- X_model_matrix_1_sub[, !apply(tmp, 2, function(x) any(is.na(x))),
+                                               drop = FALSE]
+
+  ############################################################
+  # Remove insignificant variables from the imputation model #
+  ############################################################
+  check <- TRUE
+  while(check){
+    tmp_1_sub <- data.frame(target = ph_sub)
+    xnames_1 <- colnames(X_model_matrix_1_sub)
+    tmp_1_sub[, xnames_1] <- X_model_matrix_1_sub
+    tmp_1_sub[, znames_1] <- Z2[!missind, , drop = FALSE]
+    tmp_1_sub[, "clID"] <- clID[!missind]
+
+    tmp_formula <- paste("target ~ 0 +",
+                         paste(xnames_1, collapse = "+"))
+
+    oldw <- getOption("warn")
+    options(warn = -1)
+    suppressMessages(reg_1_sub <- nnet::multinom(stats::formula(tmp_formula), data = tmp_1_sub,
+                                                 trace = FALSE))
+    options(warn = oldw)
+    z <- summary(reg_1_sub)$coefficients / summary(reg_1_sub)$standard.errors
+    pvalues <- apply((1 - stats::pnorm(abs(z)))*2, 2, min)
+    insignificant_variables <- which(pvalues > pvalue)
+    most_insignificant <- insignificant_variables[which.max(pvalues[insignificant_variables])]
+
+    if(length(most_insignificant) == 0){
+      check <- FALSE
+    }else{
+      #get and update the model matrix:
+      tmp <- stats::model.matrix(reg_1_sub) #if an additional intercept variable is included by the model
+      #we cannot run stats::model.matrix(reg_1_sub)[, -most_insignificant]
+      #Because most_insignificant refers to a situation without an intercept variable.
+      X_model_matrix_1_sub <- tmp[, !colnames(tmp) %in% names(most_insignificant), drop = FALSE]
+
     }
-
   }
 
-  #Remove correlated variables
+  #Remove highly correlated variables
 
-  tmptypes <- array(dim = ncol(X_0_all))
-  for(i in 1:length(tmptypes)){
-    tmptypes[i] <- get_type(X_0_all[, i], rounding_degrees = rounding_degrees)
-  }
+  tmptypes <- apply(X_model_matrix_1_sub, 2, get_type)
   somethingcont <- tmptypes %in% c("cont", "binary", "roundedcont", "semicont")
   correlated <- NULL
   if(sum(somethingcont, na.rm = TRUE) >= 2){
-    tmp0 <- stats::cor(X_0_all[, somethingcont])
+    tmp0 <- stats::cor(X_model_matrix_1_sub[, somethingcont])
     tmp0[lower.tri(tmp0, diag = TRUE)] <- NA
     tmp1 <- stats::na.omit(as.data.frame(as.table(tmp0)))
     correlated <- unique(as.character(subset(tmp1,
-                        abs(tmp1[, 3]) > 0.25 & abs(tmp1[, 3]) < 1)[, 1]))
+                        abs(tmp1[, 3]) > 0.99 & abs(tmp1[, 3]) < 1)[, 1]))
   }
 
   if(!is.null(correlated)){
-    X_0_all <- X_0_all[, !colnames(X_0_all) %in% correlated]
+    X_model_matrix_1_sub <- X_model_matrix_1_sub[, !colnames(X_model_matrix_1_sub) %in% correlated]
   }
 
-  YX_1_all <- data.frame(target = ph)
-  xnames_1 <- paste("X", 1:ncol(X_0_all), sep = "")
-  YX_1_all[xnames_1] <- X_0_all
-  YXZ_1_all <- YX_1_all
-  znames <- paste("Z", 1:ncol(Z), sep = "")
-  YXZ_1_all[znames] <- Z
-  YXZ_1_all[, "clID"] <- clID
-  YXZ_1_sub <- YXZ_1_all[!missind, , drop = FALSE]
+
+  YXZ_2_sub <- data.frame(target = ph_sub)
+  xnames_1 <- colnames(X_model_matrix_1_sub)
+  YXZ_2_sub[, xnames_1] <- X_model_matrix_1_sub
+  YXZ_2_sub[, znames_1] <- Z2[!missind, , drop = FALSE]
+  YXZ_2_sub[, "clID"] <- clID[!missind]
+
+  tmp_2_all <- tmp_0_all[, colnames(YXZ_2_sub), drop = FALSE]
+
+  if(length(xnames_1) == 0){
+    fixformula <- stats::formula("target ~ 1:trait")
+  }else{
+    fixformula <- stats::formula(paste("target~ - 1 + ",
+                                       paste(xnames_1, ":trait", sep = "", collapse = "+"), sep = ""))
+  }
+
+  if(length(znames_1) == 0){
+    randformula <- stats::formula("~us(1:trait):clID")
+  }else{
+    randformula <- stats::formula(paste("~us( - 1 + ", paste(znames_1, ":trait", sep = "", collapse = "+"),
+                                        "):clID", sep = ""))
+  }
 
   # -------------- calling the gibbs sampler to get imputation parameters----
-  fixformula <- stats::formula(paste("target~ - 1 + ",
-                                paste(xnames_1, ":trait", sep = "", collapse = "+"), sep = ""))
-
-  randformula <- stats::formula(paste("~us( - 1 + ", paste(znames, ":trait", sep = "", collapse = "+"),
-                                 "):clID", sep = ""))
-
-  J <- length(table(y_imp)) #number of categories
-  number_fix_parameters <- ncol(X_0_all) * (J-1)
+  J <- length(unique(ph_sub)) #number of categories
+  number_fix_parameters <- ncol(X_model_matrix_1_sub) * (J-1)
 
   # Get the number of random effects variables
-  number_random_effects <- length(znames)
+  number_random_effects <- length(znames_1)
   number_random_parameters <- number_random_effects * (J - 1)
   #Fix residual variance R at 1
   # cf. http://stats.stackexchange.com/questions/32994/what-are-r-structure-g-structure-in-a-glmm
@@ -195,12 +232,13 @@ imp_cat_multi <- function(y_imp,
   prior <- list(R = list(V = IJ, fix = 1),
                 G = list(G1 = list(V = diag(number_random_parameters), nu = 2)))
 
+
   #Experience showed that categorical models need higher number of Gibbs-Sampler
   #to converge.
   MCMCglmm_draws <- MCMCglmm::MCMCglmm(fixed = fixformula,
                                        random = randformula,
                                        rcov = ~us(trait):units,
-                                       data = YXZ_1_sub,
+                                       data = YXZ_2_sub,
                                        family = "categorical",
                                        verbose = FALSE, pr = TRUE,
                                        prior = prior,
@@ -212,11 +250,12 @@ imp_cat_multi <- function(y_imp,
   pointdraws <- MCMCglmm_draws$Sol
   variancedraws <- MCMCglmm_draws$VCV
 
+  number_fix_parameters <-  ncol(X_model_matrix_1_sub)*(J-1)
   xdraws <- pointdraws[, 1:number_fix_parameters, drop = FALSE]
   zdraws <- pointdraws[, number_fix_parameters +
-                         1:(number_random_parameters * number_clusters), drop = FALSE]
+                         1:(number_random_effects * number_clusters), drop = FALSE]
 
-
+  #old: number_random_parameters
   number_of_draws <- nrow(pointdraws)
   select.record <- sample(1:number_of_draws, size = 1)
 
@@ -233,8 +272,8 @@ imp_cat_multi <- function(y_imp,
   #will be saved (in the columns).
 
   fix_eff_sample <- matrix(xdraws[select.record, ], byrow = TRUE, ncol = J - 1)
-  rownames(fix_eff_sample) <- paste("covariate", 1:ncol(X_0_all))
-  colnames(fix_eff_sample) <- paste("effect for category", 1:(J-1))
+  #rownames(fix_eff_sample) <- paste("covariate", 1:ncol(X_model_matrix_1_sub))
+  #colnames(fix_eff_sample) <- paste("effect for category", 1:(J-1))
   #xdraws has the following form:
   #c(x1 effect for category 1, x1 effect for cat 2, ..., x1 effect for last cat,
   # x2 effect for cat 1, ..., x2 effect for last cat,
@@ -243,9 +282,9 @@ imp_cat_multi <- function(y_imp,
   rand_eff_sample <- matrix(zdraws[select.record, ], nrow = number_clusters)
   rownames(rand_eff_sample) <- paste("cluster", 1:number_clusters)
 
-  colnames(rand_eff_sample) <- paste(paste("effect of Z", 1:number_random_effects,
-                                " on category ", sep = ""),
-                                rep(1:(J-1), each = number_random_effects), sep = "")
+  #colnames(rand_eff_sample) <- paste(paste("effect of Z", 1:number_random_effects,
+  #                              " on category ", sep = ""),
+  #                              rep(1:(J-1), each = number_random_effects), sep = "")
 
   # zdraws has the following form:
   # effect of Z1 on category 1 in cluster 1,
@@ -279,9 +318,9 @@ imp_cat_multi <- function(y_imp,
     rand_betas <- rand_eff_sample[, k, drop = FALSE]
 
     exp_beta[, k] <-
-        as.matrix(exp(as.matrix(YXZ_1_all[, xnames_1, drop = FALSE]) %*%
+        as.matrix(exp(as.matrix(tmp_2_all[, xnames_1, drop = FALSE]) %*%
                         fix_eff_sample[, k, drop = FALSE] +#fix effects
-    rowSums(YXZ_1_all[, znames, drop = FALSE] * rand_betas[clID, , drop = FALSE])))#random effects
+    rowSums(tmp_2_all[, znames_1, drop = FALSE] * rand_betas[clID, , drop = FALSE])))#random effects
 
       #explanation for the fixed effects part:
       #MCMCglmm_draws$Sol is ordered in the following way: beta_1 for category 1, beta_1 for category_2

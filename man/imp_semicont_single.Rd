@@ -4,8 +4,8 @@
 \alias{imp_semicont_single}
 \title{The function for hierarchical imputation of semicontinuous variables.}
 \usage{
-imp_semicont_single(y_imp, X_imp, heap = 0, rounding_degrees = c(1, 10, 100,
-  1000))
+imp_semicont_single(y_imp, X_imp, heap = 0, pvalue = 0.2,
+  rounding_degrees = c(1, 10, 100, 1000))
 }
 \arguments{
 \item{y_imp}{A Vector with the variable to impute.}
@@ -13,6 +13,9 @@ imp_semicont_single(y_imp, X_imp, heap = 0, rounding_degrees = c(1, 10, 100,
 \item{X_imp}{A data.frame with the fixed effects variables.}
 
 \item{heap}{A numeric value saying to which value the data might be heaped.}
+
+\item{pvalue}{A numeric between 0 and 1 denoting the threshold of p-values a variable in the imputation
+model should not exceed. If they do, they are excluded from the imputation model.}
 
 \item{rounding_degrees}{A numeric vector with the presumed rounding degrees.}
 }

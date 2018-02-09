@@ -2,16 +2,26 @@
 #'
 #' For example the income in surveys is often reported rounded by the respondents.
 #' See Drechsler, Kiesl and Speidel (2015) for more details.
-#' @param y A Vector with the variable to impute.
+#' @param y_df A data.frame with the variable to impute.
 #' @param X A data.frame with the fixed effects variables.
+#' @param PSI A data.frame with the variables explaining the latent rounding tendency G.
+#' @param pvalue A numeric between 0 and 1 denoting the threshold of p-values a variable in the imputation
+#' model should not exceed. If they do, they are excluded from the imputation model.
 #' @param rounding_degrees A numeric vector with the presumed rounding degrees.
+#' Or a list with model formulas for G, where each list element has the name of a rounded continuous variable.
+#' Such a list can be generated
 #' @references Joerg Drechsler, Hans Kiesl, Matthias Speidel (2015):
 #' "MI Double Feature: Multiple Imputation to Address Nonresponse and Rounding Errors in Income Questions".
 #' Austrian Journal of Statistics Vol. 44, No. 2, http://dx.doi.org/10.17713/ajs.v44i2.77
 #' @return A n x 1 data.frame with the original and imputed values.
-imp_roundedcont <- function(y, X, rounding_degrees = c(1, 10, 100, 1000)){
+imp_roundedcont <- function(y_df,
+                            X,
+                            PSI,
+                            pvalue = 0.2,
+                            rounding_degrees = NULL){
 
   # ----------------------------- preparing the Y data ------------------
+  y <- y_df[, 1]
   if(is.factor(y)){
     y <- as.interval(y)
   }
@@ -23,7 +33,25 @@ imp_roundedcont <- function(y, X, rounding_degrees = c(1, 10, 100, 1000)){
   X1 <- cleanup(X)
 
   # standardize X
-  X1_stand <- stand(X1, rounding_degrees = rounding_degrees)
+  X <- stand(X1, rounding_degrees = rounding_degrees)
+
+  #the intercept variable shall be the first variable. Reason: later the intercept variable
+  #in the model based on this data set is excluded from optimization. Reason: the value of the
+  #intercept is exactly 1 if y and x are standardized.
+  tmp <- which(unlist(lapply(X, get_type)) == "intercept")
+
+  X <- X[, c(tmp, (1:ncol(X))[-tmp])]
+
+
+  #If no default rounding_degrees were given, suggest_rounding_degrees suggets them
+  if(is.null(rounding_degrees)){
+    rounding_degrees <- suggest_rounding_degrees(y)
+  }
+
+  #... if they are still NULL, then c(1, 10, 100, 1000) is used as a default
+  if(is.null(rounding_degrees)){
+    rounding_degrees <- c(1, 10, 100, 1000)
+  }
 
   #The imputation model of missing values is Y ~ X.
   #In order to get a full model matrix, we need two things
@@ -59,79 +87,86 @@ imp_roundedcont <- function(y, X, rounding_degrees = c(1, 10, 100, 1000)){
 
   # standardise all observations
   y_stand <- (y - mean_of_y_precise)/sd_of_y_precise + 1
-
+  y_precise_template <- sample_imp(center.interval(y, inf2NA = TRUE))[, 1]
+  y_precise_template_stand <- (y_precise_template - mean_of_y_precise)/sd_of_y_precise + 1
   # standardise the decomposed y
   decomposed_y_stand <- (decomposed_y - mean_of_y_precise)/sd_of_y_precise + 1
 
-  # run a linear model to get the suitable model.matrix for imputation of the NAs
-  # Later, another model is run. In many cases, both models are redundant.
-  # But in cases with categorical covariates, X_model_matrix_1 will generate
-  # additional covariates compared to X_imp_stand.
-  # The names of these variables are then stored in tmp_1.
-  # Then in the second model it is checked for unneeded variables
-  # (e.g. unneeded categories).
-  ph_for_y <- sample_imp(rowMeans(decomposed_y_stand[, 4:5]))[, 1]
-  df_for_y_on_x <- data.frame(ph_for_y = ph_for_y)
 
-  # run a linear model to get the suitable model.matrix for imputation of the NAs
-  xnames_0 <- paste("X", 1:ncol(X1_stand), sep = "")
+  low_sample <- decomposed_y_stand[, "lower_general"]
+  up_sample  <- decomposed_y_stand[, "upper_general"]
 
-  df_for_y_on_x[xnames_0] <- X1_stand
-  model_y_on_x <-  stats::lm(ph_for_y ~ 0 + . , data = df_for_y_on_x)
+  y_precise_template <- msm::rtnorm(n = n, lower = low_sample,
+                                    upper = up_sample,
+                                    mean = y_precise_template_stand,
+                                    sd = 1)
 
-  #model matrix
-  MM_y_on_x_0 <- stats::model.matrix(model_y_on_x)
-  xnames_1 <- paste("X", 1:ncol(MM_y_on_x_0), sep = "")
+  ph <- y_precise_template
 
-  df_for_y_on_x <- data.frame(ph_for_y = ph_for_y)
-  df_for_y_on_x[, xnames_1] <- MM_y_on_x_0
 
-  safetycounter <- 0
-  unneeded <- TRUE
-  while(any(unneeded) & safetycounter <= ncol(MM_y_on_x_0)){
+  tmp_0_all <- data.frame(target = ph, X)
+  xnames_1 <- colnames(X)
 
-    safetycounter <- safetycounter + 1
+  tmp_formula <- paste("target~ 0 + ", paste(xnames_1, collapse = "+"), sep = "")
+  reg_1_all <- stats::lm(stats::formula(tmp_formula), data = tmp_0_all)
 
-    # Run another model and...
-    reg_1 <- stats::lm(ph_for_y ~ 0 +., data = df_for_y_on_x)
-    MM_y_on_x_1 <- stats::model.matrix(reg_1)
+  X_model_matrix_1_all <- stats::model.matrix(reg_1_all)
+  xnames_1 <- paste("X", 1:ncol(X_model_matrix_1_all), sep = "")
+  colnames(X_model_matrix_1_all) <- xnames_1
 
-    #... remove unneeded variables with an NA coefficient
-    unneeded <- is.na(stats::coefficients(reg_1))
-    xnames_1 <- colnames(MM_y_on_x_1)[!unneeded]
+  tmp_0_all <- data.frame(target = ph)
+  tmp_0_all[, xnames_1] <- X_model_matrix_1_all
 
-    df_for_y_on_x <- data.frame(ph_for_y = ph_for_y)
-    df_for_y_on_x[, xnames_1] <- MM_y_on_x_1[, !unneeded, drop = FALSE]
+  #From this initial model matrix X_model_matrix_1_all
+  #now step by step irrelavant variables are removed.
+
+  # Principally those models are based on precise observations only.
+  # But in some data situation, there might be no presice observations, only intervals;
+  # then all precise and interval data has to be used.
+  # Precise data can be use directly, from imprecise data, a draw from within their bounds is used
+  if(sum(indicator_precise) < 30){
+    use_indicator <- indicator_precise | indicator_imprecise
+  }else{
+    use_indicator <- indicator_precise
+  }
+  X_model_matrix_1_sub <- X_model_matrix_1_all[use_indicator, , drop = FALSE]
+
+  # The first step of the reduction is to remove variables having a non-measurable effect
+  # (e.g. due to colinearity) on y.
+  # tmp_1 shall include the covariates (like X_model_matrix) and additionally the target variable
+  ph_sub <- ph[use_indicator]
+  tmp_1_sub <- data.frame(target = ph_sub)
+  xnames_1 <- colnames(X_model_matrix_1_sub)
+  tmp_1_sub[, xnames_1] <- X_model_matrix_1_sub
+
+  tmp_formula <- paste("target~ 0 + ", paste(xnames_1, collapse = "+"), sep = "")
+  reg_1_sub <- stats::lm(stats::formula(tmp_formula) , data = tmp_1_sub)
+
+  #remove unneeded variables
+  X_model_matrix_1_sub <- X_model_matrix_1_sub[, !is.na(stats::coefficients(reg_1_sub)),
+                                               drop = FALSE]
+
+  # Remove insignificant variables from the imputation model
+  check <- TRUE
+  while(check){
+    tmp_1_sub <- data.frame(target = ph_sub)
+    xnames_1 <- colnames(X_model_matrix_1_sub)
+    tmp_1_sub[, xnames_1] <- X_model_matrix_1_sub
+    tmp_formula <- paste("target~ 0 + ", paste(xnames_1, collapse = "+"), sep = "")
+    reg_1_sub <- stats::lm(stats::formula(tmp_formula), data = tmp_1_sub)
+
+    pvalues <- summary(reg_1_sub)$coefficients[, 4]
+    insignificant_variables <- which(pvalues > pvalue)
+    most_insignificant <- insignificant_variables[which.max(pvalues[insignificant_variables])]
+
+    if(length(most_insignificant) == 0){
+      check <- FALSE
+    }else{
+      X_model_matrix_1_sub <- stats::model.matrix(reg_1_sub)[, -most_insignificant, drop = FALSE]
+    }
   }
 
-  reg_2 <- stats::lm(ph_for_y ~ 0 + ., data = df_for_y_on_x)
-  MM_y_on_x_2 <- stats::model.matrix(reg_2)
-
-  # Now check for variables with too much variance
-  max.se <- abs(stats::coef(reg_2) * 3)
-  coef.std <- sqrt(diag(stats::vcov(reg_2)))
-
-  includes_unimportants <- any(coef.std > max.se)
-
-  safetycounter <- 0
-  while(includes_unimportants & safetycounter <= ncol(MM_y_on_x_0)){
-    safetycounter <- safetycounter + 1
-
-    xnames_1 <- colnames(MM_y_on_x_2)[coef.std <= max.se]
-
-    df_for_y_on_x <- data.frame(ph_for_y = ph_for_y)
-    df_for_y_on_x[, xnames_1] <- MM_y_on_x_2[, xnames_1, drop = FALSE]
-
-    reg_2 <- stats::lm(ph_for_y ~ 0 +., data = df_for_y_on_x)
-
-    MM_y_on_x_2 <- stats::model.matrix(reg_2)
-    #check the regression parameters on very high standard errors
-    max.se <- abs(stats::coef(reg_2) * 3)
-    coef.std <- sqrt(diag(stats::vcov(reg_2)))
-
-    includes_unimportants <- any(coef.std > max.se)
-  }
-
+  tmp_2_all <- tmp_0_all[, colnames(tmp_1_sub), drop = FALSE]
 
   # --preparing the ml estimation
   # -define rounding intervals
@@ -146,10 +181,24 @@ imp_roundedcont <- function(y, X, rounding_degrees = c(1, 10, 100, 1000)){
     rounding_categories_indicator[, i] <- decomposed_y[indicator_precise, "precise"] %% rounding_degrees[i] == 0
   }
 
-  p <- factor(rowSums(rounding_categories_indicator))
+  g <- factor(rowSums(rounding_categories_indicator), ordered = TRUE)
 
-  # Define a matrix for the model p ~ Y + X
-  df_for_p_on_y_and_x <- data.frame(ph_for_p = p, df_for_y_on_x[indicator_precise, , drop = FALSE])
+  #preparing the PSI data (the variables explaining the rounding tendency G)
+  # From interval variables, only the precise part can be used.
+  vars_being_intervals <- apply(PSI, 2, is_interval)
+  vars_being_intervals[names(vars_being_intervals) == colnames(y_df)[1]] <- FALSE
+  PSI <- PSI[, !vars_being_intervals, drop = FALSE]
+
+  # The target variable in PSI has be to present precisely
+  PSI[, colnames(y_df)[1]] <- decompose_interval(PSI[, colnames(y_df)[1]])[, "precise"]
+  # This dataset must not include any NA, except y can include missing values, as
+  # the rounding tendency is only calculated based on precise observations
+  vars_having_NAs <- apply(PSI, 2, function(x) any(is.na(x)))
+  vars_having_NAs[names(vars_having_NAs) == colnames(y_df)[1]] <- FALSE
+  PSI <- PSI[, !vars_having_NAs, drop = FALSE]
+  PSI <- stand(PSI, rounding_degrees = NULL)
+  # Define a matrix for the model G ~ PSI
+  df_for_g <- data.frame(target = g, PSI[indicator_precise, , drop = FALSE])
 
   #####maximum likelihood estimation using starting values
   ####estimation of the parameters
@@ -157,31 +206,29 @@ imp_roundedcont <- function(y, X, rounding_degrees = c(1, 10, 100, 1000)){
   # estimation of the starting values for eta and the thresholds on the x-axis:
   # ordered probit maximum possible rounding on the rounded in income data
 
-  tryCatch(
+  probitstart <- tryCatch(
     {
 
       #polr throws an warning, if no intercept is included in the model formula
       #(See ?polr)
       #so we add one in the formula and exclude the constant variable in the data.frame
       #before hand.
-      constant_variables <- apply(df_for_p_on_y_and_x, 2, function(x) length(unique(x)) == 1)
-      df_for_p_on_y_and_x_2 <- df_for_p_on_y_and_x[, !constant_variables, drop = FALSE]
-      if(ncol(df_for_p_on_y_and_x_2) == 1){
-        probitstart <- MASS::polr("target ~ 0 + .",
-                                  data = df_for_p_on_y_and_x,
-                                  contrasts = NULL, Hess = TRUE, model = TRUE,
-                                  method = "logistic")
+      constant_variables <- apply(df_for_g, 2, function(x) length(unique(x)) == 1)
+      df_for_g_2 <- df_for_g[, !constant_variables, drop = FALSE]
+      if(ncol(df_for_g_2) == 1){
+        probitstart <- VGAM::vglm("target ~ 0 + .",
+                                  data = df_for_g,
+                                  family = VGAM::cumulative(parallel = TRUE))
       }else{
-        probitstart <- MASS::polr("ph_for_p ~ 1 + .",
-                                  data = df_for_p_on_y_and_x_2,
-                                  contrasts = NULL, Hess = TRUE, model = TRUE,
-                                  method = "probit")
-      }
+        probitstart <- VGAM::vglm("target ~ 1 + .", data = df_for_g_2,
+                                  family = VGAM::cumulative(parallel = TRUE))
 
+      }
+      probitstart
 
     },
     error = function(cond) {
-      cat("We assume that perfect separation occured in your rounded continuous variable, because of too few observations.\n
+      stop("We assume that perfect separation occured in your rounded continuous variable, because of too few observations.\n
 Consider specifying the variable to be continuous via list_of_types (see ?hmi).\n")
       cat("Here is the original error message:\n")
       cat(as.character(cond))
@@ -193,38 +240,84 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
 Consider specifying the variable to be continuous via list_of_types (see ?hmi).\n")
       cat("Here is the original warning message:\n")
       cat(as.character(cond))
+      constant_variables <- apply(df_for_g, 2, function(x) length(unique(x)) == 1)
+      df_for_g_2 <- df_for_g[, !constant_variables, drop = FALSE]
+      if(ncol(df_for_g_2) == 1){
+        probitstart <- VGAM::vglm("target ~ 0 + .",
+                                  data = df_for_g,
+                                  family = VGAM::cumulative(parallel = TRUE))
+      }else{
+        probitstart <- VGAM::vglm("target ~ 1 + .", data = df_for_g_2, family = VGAM::cumulative(parallel = TRUE))
 
-      return(NULL)
+      }
+      return(probitstart)
     },
     finally = {
 
     }
   )
 
-  gamma1start <- probitstart$coefficients[names(probitstart$coefficients) == "ph_for_y"]
 
-  kstart <- as.vector(probitstart$zeta) # the tresholds (in the summary labeled "Intercepts")
+  PSI_as_MM <- stats::model.matrix(probitstart)[1:nrow(stats::model.matrix(probitstart)),
+                                                1:ncol(stats::model.matrix(probitstart))]
+  #remove the intercept variables
+  PSI_as_MM <- PSI_as_MM[, -grep("(Intercept)", colnames(PSI_as_MM)), drop = FALSE]
+  #remove target variable
+  PSI_as_MM <- PSI_as_MM[, -grep(colnames(y_df)[1], colnames(PSI_as_MM)), drop = FALSE]
+  #Individuals are containted multiple times in the model.matrices returned by VGAM,
+  #dependent on how many categories there are. The presumed purpose is to genereta (K-1) intercept dummies
+
+  PSI_as_MM <- PSI_as_MM[seq(1, nrow(PSI_as_MM), by = length(unique(g))-1), , drop = FALSE]
+
+  tmp <- attr(probitstart, "coefficients")
+  kstart <- as.vector(tmp[grep("(Intercept)", names(tmp))])
+    # the tresholds (in the summary labeled "Intercepts")
   #explaining the tresholds for the example of rounding degrees 1, 10, 100 and 1000:
   #0 (rounding degree 1), 0|1 (reounding degree 10),  1|2 (100),  2|3 (1000)
 
   # it might be more practical to run the model
   #only based on the observed data, but this could cause some covariates in betastart2 to be dropped
-  betastart <- as.vector(model_y_on_x$coef)
-  sigmastart <- stats::sigma(model_y_on_x)
+  betastart <- as.vector(reg_1_sub$coef)
+  sigmastart <- stats::sigma(reg_1_sub)
+
+  gammastart <- tmp[-grep("(Intercept)", names(tmp))]
+  gamma1start <- gammastart[names(gammastart) == colnames(y_df)[1]]
+  gamma1name <- "gamma1"
+
+  vars_in_psi <- names(gammastart)[names(gammastart) != colnames(y_df)[1]]
+  gammastart_without_y <- gammastart[vars_in_psi]
+  # It can happen, that the user does not want y to be an explanatory variable.
+  # In this case, gamma1 has to be set to 0 and shall not be part of the optimization
+  if(length(gamma1start) == 0){
+    gamma1start <- NULL
+    gamma1name <- NULL
+  }
+
+  gamma_without_y_name <- paste("coef_g_on_psi", 1:length(gammastart_without_y), sep = "")
+  if(length(gammastart_without_y) == 0){
+    gammastart_without_y <- NULL
+    gamma_without_y_name <- NULL
+  }
 
   #####maximum likelihood estimation using the starting values
   #The intercept of the model for y has not be maximized as due to the standardizations
-  #of y and x, it's value is exactly 1.
-  starting_values <- c(kstart, betastart, gamma1start, sigmastart)
+  #of y and x, it's value is exactly 1. later it will be removed.
+  starting_values <- c(kstart, betastart, gamma1start, gammastart_without_y, sigmastart)
+  #tau is not included as it has to be fixed at 1 to make the ordered probit model identifiable
+  #c.f. p.62 in Drechsler, Kiesl, Speidel (2015)
+
 
   names(starting_values)[1:length(kstart)] <- paste("threshold", 1:length(kstart), sep = "")
+
   names(starting_values)[length(kstart) + 1:length(betastart)] <-
     paste("coef_y_on_x", 1:length(betastart), sep = "")
-  names(starting_values)[length(kstart) + length(betastart) + 1:length(gamma1start)] <-
-    paste("coef_p_on_y_and_x", 1:length(gamma1start), sep = "")
+
+  names(starting_values)[length(kstart) + length(betastart) +
+                          1:length(gammastart)] <- c(gamma1name, gamma_without_y_name)
+
   names(starting_values)[length(starting_values)] <- "sigma"
   ###exclude obs below (above) the 0.5% (99.5%) income quantile before maximizing
-  ###the likelihood. Reason: Some extrem outliers cause problems during the
+  ###the likelihood. Reason: Some extrem outliers probably cause problems during the
   ###maximization
 
   quants <- stats::quantile(decomposed_y_stand[indicator_precise, "precise"],
@@ -233,12 +326,16 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
   indicator_outliers <- (decomposed_y_stand[indicator_precise, "precise"] < quants[1] |
                          decomposed_y_stand[indicator_precise, "precise"] > quants[2])
 
-  m2 <- stats::optim(par = starting_values[-(length(kstart) + 1)], negloglik,
-                     X_in_negloglik = MM_y_on_x_0,
+  #The intercept in beta is not part of the maximazition, as due to standardizations of y and x,
+  #its value is exactly 1#[-(length(kstart) + 1)].
+  m2 <- stats::optim(par = starting_values, negloglik,
+                     X_in_negloglik = tmp_2_all[ , xnames_1, drop = FALSE],
+                     PSI_in_negloglik = PSI_as_MM,
+                     vars_in_psi = vars_in_psi,
                      y_precise_stand = decomposed_y_stand[indicator_precise, "precise"],
                      lower_bounds = decomposed_y_stand[indicator_imprecise, 2],
                      upper_bounds = decomposed_y_stand[indicator_imprecise, 3],
-                     my_p = as.numeric(as.character(p)),
+                     my_g = as.numeric(as.character(g)),
                      sd_of_y_precise = sd_of_y_precise,
                      rounding_degrees = rounding_degrees,
                      indicator_precise = indicator_precise,
@@ -257,9 +354,7 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
 
   Sigma_ml2 <- tryCatch(
     {
-
-      Sigma_ml2 <- solve(hess)
-
+     solve(hess)
     },
     error = function(cond) {
       cat("Hessian matrix couldn't be inverted (in the imputation function of the rounded continuous variable).
@@ -267,8 +362,9 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
       cat("Here is the original error message:\n")
       cat(as.character(cond))
 
-      Sigma_ml2 <- diag(ncol(hess))
-      diag(Sigma_ml2) <- abs(pars)/100
+      tmp <- diag(ncol(hess))
+      diag(tmp) <- abs(par_ml2)/100
+      return(tmp)
 
     },
     warning = function(cond) {
@@ -276,7 +372,7 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
       cat("Here is the original warning message:\n")
       cat(as.character(cond))
 
-      Sigma_ml2 <- solve(hess)
+      return(solve(hess))
 
     },
     finally = {
@@ -303,16 +399,18 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
   }
 
   # derive imputation model parameters from previously drawn parameters
-  if(ncol(MM_y_on_x_0) == 1){
+  if(ncol(X_model_matrix_1_sub) == 1){
     beta_hat <- matrix(1, ncol = 1)
   }else{
-    beta_hat <- as.matrix(c(1, pars[length(rounding_degrees):(length(pars) - 2)]), ncol = 1)
+    beta_hat <- matrix(pars[grep("^coef_y_on_x", colnames(pars))], ncol = 1)
   }
 
-  gamma1_hat <- pars[length(pars) - 1]
-  sigma_hat <- pars[length(pars)]
-  mu_g <- gamma1_hat * (as.matrix(MM_y_on_x_0) %*% beta_hat)
-  mu_y <- as.matrix(MM_y_on_x_0) %*% beta_hat
+  gamma1_hat <- pars[grep("^gamma1", colnames(pars))]
+  gamma_hat <- matrix(pars[grep("^coef_g_on_psi", colnames(pars))], ncol = 1)
+  sigma_hat <- pars[grep("^sigma", colnames(pars))]
+  mu_g <- gamma1_hat * (as.matrix(tmp_2_all[, xnames_1, drop = FALSE]) %*% beta_hat) +
+    as.matrix(PSI[, vars_in_psi, drop = FALSE], nrow = nrow(PSI)) %*% gamma_hat
+  mu_y <- as.matrix(tmp_2_all[, xnames_1, drop = FALSE]) %*% beta_hat
 
   #The covariance matrix from equation (3)
   Sigma <- matrix(c(1 + gamma1_hat^2 * sigma_hat^2,
@@ -322,7 +420,6 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
   ###########################################################
   #BEGIN IMPUTING INTERVAL-DATA AND COMPLETELY MISSING DATA#
   # The imputation for precise but rounded data follows in the next section.
-  # precise and not rounded data need no impuation at all.
 
   lower_general_stand <- decomposed_y_stand[, "lower_general"][indicator_imprecise | indicator_missing]
   upper_general_stand <- decomposed_y_stand[, "upper_general"][indicator_imprecise | indicator_missing]
@@ -345,7 +442,6 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
   imp_tmp[indicator_imprecise | indicator_missing] <-
     (mytry_interval - 1) * sd_of_y_precise + mean_of_y_precise
 
-
   ###############################################################################
   ########################### BEGIN UNROUNDING-IMPUTATION########################
   ###define bounds for the rounding basis
@@ -354,31 +450,37 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
   #Principally this could be done without standardization, but it makes the following functions
   #work more reliably.
   #If standardization happens, it is important to adjust the parameters accordingly.
-  y_lower <- (decomposed_y[indicator_precise, "precise"] -
-                half_interval_length[as.numeric(as.character(p))] - mean_of_y_precise)/sd_of_y_precise + 1
+  actually_rounded <- g != 0
+  y_lower <- (decomposed_y[indicator_precise, "precise"][actually_rounded] -
+                half_interval_length[as.numeric(as.character(g))[actually_rounded]] - mean_of_y_precise)/sd_of_y_precise + 1
 
-  y_upper <- (decomposed_y[indicator_precise, "precise"] +
-                half_interval_length[as.numeric(as.character(p))] - mean_of_y_precise)/sd_of_y_precise + 1
+  y_upper <- (decomposed_y[indicator_precise, "precise"][actually_rounded] +
+                half_interval_length[as.numeric(as.character(g))[actually_rounded]] - mean_of_y_precise)/sd_of_y_precise + 1
 
-  g_upper <- bounds_for_g_hat[as.numeric(as.character(p)) + 1]
+  g_upper <- bounds_for_g_hat[as.numeric(as.character(g))[actually_rounded] + 1]
 
-  #elements <- cbind(mymean, -Inf, y_lower, g_upper, y_upper)#ORIGINAL
-  elements <- cbind(-Inf, mu_g[indicator_precise, 1], g_upper,
-                    y_lower, mu_y[indicator_precise, 1], y_upper)
+  elements <- cbind(-Inf, mu_g[indicator_precise, 1][actually_rounded], g_upper,
+                    y_lower, mu_y[indicator_precise, 1][actually_rounded], y_upper)
 
   # Note: we set g_lower to -Inf because we state that a value of 1500 is not necessarily
   # a multiple of 500; it could also be rounded to the next multiple of 10 or even 1.
   colnames(elements) <- c("g_lower", "mean_g","g_upper", "y_lower","mean_y",   "y_upper")
 
   ###indicator which of the precise observations need to be imputed due to rounding
+  #(incl. rounding to the nearest number, i.e. rounding to degree 1)
   #(and not because they are missing)
-  rounded <- rep(TRUE, length(p))
+  rounded <- rep(TRUE, sum(actually_rounded))
 
+  counter <- 0
   while(any(rounded)){
+    counter <- counter + 1
 
     ###draw values for g and y from a truncated multivariate normal
     ###drawn y must be between y_lower and y_upper
     ###drawn g must be between g_lower and g_upper
+    if(counter >= 50){
+      elements[, 2] <- bounds_for_g_hat[length(bounds_for_g_hat)-1]
+    }
     mytry <- t(apply(elements[rounded, , drop = FALSE],
                     1, sampler, Sigma))
 
@@ -434,8 +536,9 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
 
     ###get imputed income on original scale
     imp_precise_temp <- (mytry[, 2, drop = FALSE] - 1) * sd_of_y_precise + mean_of_y_precise
+
     #Store these results as imputation values...
-    imp_tmp[indicator_precise][rounded] <- imp_precise_temp
+    imp_tmp[indicator_precise][actually_rounded][rounded] <- imp_precise_temp
 
     #... but test if estimated rounding degree and proposed y can explain the observed y.
     # E.g. the estimated rounding degree 10 and the proposed y 2063 doesn't match
@@ -443,7 +546,7 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
     #If degree and y do match set the value for rounded to FALSE.
     # The remaining (non-matching) observations get a new proposal y and rounding degree.
     domatch <- floor(imp_precise_temp[, 1]/rounding_degrees[round_int] + 0.5) * rounding_degrees[round_int] ==
-                          decomposed_y[indicator_precise, "precise"][rounded]
+                          decomposed_y[indicator_precise, "precise"][actually_rounded][rounded]
     rounded[rounded][domatch] <- FALSE
   }
 

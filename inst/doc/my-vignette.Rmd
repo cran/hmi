@@ -212,7 +212,7 @@ The example uses the data set `CO2` about the "Carbon Dioxide Uptake in Grass Pl
 
 You can see in advance how variables will be treated internally by `hmi` if you call the `list_of_types_maker`. For example `example_list_of_types <- list_of_types_maker(CO2)` gives you the following list:
 <!--
-source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-10-28.R')
+source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2018-01-31.R')
 example_list_of_types <- list_of_types_maker(CO2)
 example_list_of_types
 -->
@@ -279,8 +279,8 @@ The most simple call of `hmi` would be be:
 ```{r echo = FALSE, message = FALSE, cache = TRUE}
 library("mice")
 library("hmi")
-#source('C:/Users/Matthias/Documents/hmi/R/hmi_wrapper_2017-12-20.R')
-#source('C:/Users/Matthias/Documents/hmi/R/hmi_imp_cont_single_2017-04-11.R')
+#source('C:/Users/Matthias/Documents/hmi/R/hmi_wrapper_2018-01-31.R')
+#source('C:/Users/Matthias/Documents/hmi/R/hmi_imp_cont_single_2018-02-02.R')
 ```
 
 ```{r eval = FALSE, message = FALSE, cache = TRUE}
@@ -329,8 +329,8 @@ result_multi <- hmi(data = ex, model_formula = Reaction ~ 1 + Days + (1 + Days |
 
 ```{r eval = TRUE, echo = FALSE, results = "hide", message = FALSE, cache = TRUE}
 library("hmi")
-#source('C:/Users/Matthias/Documents/hmi/R/hmi_imp_cont_multi_2017-10-25.R')
-#source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-12-28.R')
+#source('C:/Users/Matthias/Documents/hmi/R/hmi_imp_cont_multi_2018-02-03.R')
+#source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2018-01-31.R')
 ex
 set.seed(1)
 result_multi <- hmi(data = ex, model_formula = Reaction ~ 1 + Days + (1 + Days | Subject), maxit = 1)
@@ -380,7 +380,7 @@ hmi_pool(mids = result_multi, analysis_function = my_analysis)
 ```
 ```{r eval = TRUE, echo = FALSE, message = FALSE, cache = TRUE}
 library("hmi")
-#source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2017-12-28.R')
+#source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2018-01-31.R')
  my_analysis <- function(complete_data){
   # In this list, you can write all the parameters you are interested in.
   # Those will be averaged.

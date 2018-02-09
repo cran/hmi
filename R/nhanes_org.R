@@ -1,0 +1,41 @@
+#' National Health and Nutrition Examination Survey (2015 - 2016) - as downloaded
+#'
+#' The Income data set from the US American National Health and Nutrition Examination Survey (NHANES)
+#' collected by the Centers for Disease Control and Prevention (CDC) and
+#' the National Center for Health Statistics (NCHS) for 2015-2016 - as downloaded.
+#' The Website (\url{https://wwwn.cdc.gov/Nchs/Nhanes/2015-2016/INQ_I.htm}) gives the following Analytic notes:
+#' "The income questions were asked as part of household interview,
+#' the interview sample weights may be used in the analysis for data in this section.
+#' However, if the data is joined with other data from the Mobile Examination Center (MEC),
+#' the MEC exam weights should be used. Please refer to the NHANES Analytic Guidelines
+#' and the on-line NHANES Tutorial for further details on the use of sample weights
+#' and other analytic issues. Both of these are available on the NHANES website."
+#'
+#' @format A data frame with 9971 rows and 16 variables:
+#' \describe{
+#' \item{seqn}{Respondent sequence number}
+#' \item{inq020}{Income from wages/salaries? 1 = Yes, 2 = No, 7 = Refused, 9 = Don't know}
+#' \item{inq012}{Income from self employment? 1 = Yes, 2 = No, 7 = Refused, 9 = Don't know}
+#' \item{inq030}{Income from Social Security or Railroad Retirement? 1 = Yes, 2 = No, 7 = Refused, 9 = Don't know}
+#' \item{inq060}{Income from other disability pension? 1 = Yes, 2 = No, 7 = Refused, 9 = Don't know}
+#' \item{inq080}{Income from retirement/survivor pension? 1 = Yes, 2 = No, 7 = Refused, 9 = Don't know}
+#' \item{inq090}{Income from Supplemental Security Income? 1 = Yes, 2 = No, 7 = Refused, 9 = Don't know}
+#' \item{inq132}{Income from state/county cash assistance? 1 = Yes, 2 = No, 7 = Refused, 9 = Don't know}
+#' \item{inq140}{Income from interest/dividends or rental? 1 = Yes, 2 = No, 7 = Refused, 9 = Don't know}
+#' \item{inq150}{Income from other sources? 1 = Yes, 2 = No, 7 = Refused, 9 = Don't know}
+#' \item{ind235}{Monthly family income?1 = 0 - 399USD, 2 = 400 - 799USD, 3 = 800 - 1,249USD, 4 = 1,250 - 1,649USD, 5 = 1,650 - 2,099USD, 6 = 2,100 - 2,899USD, 7 = 2,900 - 3,749USD, 8 = 3,750 - 4,599USD, 9 = 4,600 - 5,399USD, 10 = 5,400 - 6,249 USD, 11 = 6,250 - 8,399USD, 12 = 8,400 USD and over, 77 = Refused, 99 = Don't know}
+#' \item{indfmmpi}{Family monthly poverty level index}
+#' \item{indfmmpc}{Family monthly poverty level category}
+#' \item{inq300}{Family has savings more than 20,000USD? 1 = Yes, 2 = No, 7 = Refused, 9 = Don't know}
+#' \item{ind310}{Total savings/cash assets for the family? 1 = 0 - 3,000USD, 2 = 3,001 - 5,000USD, 3 = 5,001 - 10,000, 4 = 10,001 - 15,000USD, 5 = 15,001 - 20,000USD, 77 = Refused, 99 = Don't know}
+#' \item{inq320}{How do you get to the grocery store?, 1 = In my car, 2 = In a car that belongs to someone I live with, 3 = In a car that belongs to someone who lives elsewhere, 4 = Walk, 5 = Ride bicycle, 6 = Bus, subway or other public transit, 7 = Taxi or other paid driver, 8 = Someone else delivers groceries, 9 = Other, 66 = No usual mode of traveling to store, 77 = Refused, 99 = Don't know}
+#' }
+#' @references
+#' Centers for Disease Control and Prevention (CDC).
+#' National Center for Health Statistics (NCHS).
+#' National Health and Nutrition Examination Survey Data.
+#' Hyattsville, MD: U.S. Department of Health and Human Services, Centers for Disease Control and Prevention.
+#' Variables descriptions at \url{https://wwwn.cdc.gov/Nchs/Nhanes/2015-2016/INQ_I.htm}
+#' @source Website of the Centers for Disease Control and Prevention:
+#' \url{https://wwwn.cdc.gov/Nchs/Nhanes/2015-2016/INQ_I.XPT}
+"nhanes_org"

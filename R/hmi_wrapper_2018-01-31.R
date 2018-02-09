@@ -15,7 +15,7 @@
 #' that should be included in the imputation model as fixed effects variables,
 #' but not in the analysis model.
 #' An alternative would be to include such variable names into the \code{model_formula}
-#' an run a reduced analysis model with \code{hmi_pool} or the functions provide by \code{mice}.
+#' and run a reduced analysis model with \code{hmi_pool} or the functions provide by \code{mice}.
 #' @param M An integer defining the number of imputations that should be made.
 #' @param maxit An integer defining the number of times the imputation cycle
 #' (imputing \eqn{x_1|x_{-1}} then \eqn{x_2|x_{-2}}, ... and finally \eqn{x_p|x_{-p}}) shall be repeated.
@@ -28,9 +28,23 @@
 #' chains, that are only examined by few iterations (say less than 1000),
 #' the \code{geweke.diag} might fail to detect convergence. In such cases it is
 #' essential to look a chain free from autocorelation.
+#' @param pvalue A numeric between 0 and 1 denoting the threshold of p-values a variable in the imputation
+#' model should not exceed. If they do, they are excluded from the imputation model.
 #' @param mn An integer defining the minimum number of individuals per cluster.
-#' @param heap A numeric value saying to which value the semi-continuous data might be heaped.
-#' @param rounding_degrees A numeric vector with the presumed rounding degrees.
+#' @param spike A numeric value saying which value in the semi-continuous data might is the spike.
+#' Or a list with with such values and names identical to the variables with spikes
+#' (see \code{list_of_spikes_maker} for details.) In versions earlier to 0.9.0 it was called \code{heap}.
+#' @param heap Use spike instead. \code{heap} is only included due to backwards compatibility
+#' and will be removed with version 1.0.0
+#' @param rounding_degrees A numeric vector with the presumed rounding degrees. Or a list with rounding degrees,
+#' where each list element has the name of a rounded continuous variable. Such a list can be generated
+#' using \code{list_of_rounding_degrees_maker(data)}. Note: it is presupposed that the rounding degrees include 1
+#' meaning that there is a positive probability that e.g. 3500 was only rounded to the nearest integer
+#' (and not rounded to the nearest multiple of 100 or 500).
+#' @param rounding_formula A formula with the model formula for the latent rounding tendency G.
+#' Or a list with model formulas for G, where each list element has the name of a rounded continuous variable.
+#' Such a list can be generated
+#' using \code{list_of_rounding_formulas_maker(data)}
 #' @param list_of_types a list where each list element has the name of a variable
 #' in the data.frame. The elements have to contain a single character denoting the type of the variable.
 #' See \code{get_type} for details about the variable types.
@@ -88,12 +102,21 @@ hmi <- function(data,
                 nitt = 25000,
                 burnin = 5000,
                 thin = 20,
+                pvalue = 1,
                 mn = 1,
-                heap = 0,
-                rounding_degrees = c(1, 10, 100, 1000),
+                spike = 0,
+                heap = NULL,
+                rounding_degrees = NULL,
+                rounding_formula = ~ .,
                 list_of_types = NULL,
                 pool_with_mice = TRUE){
   options(error = expression(NULL))
+  if(is.null(heap)){
+    heap <- spike
+  }else{
+    warning("To avoid confusion with  >>heap<< when writing about the >>rounding_degrees>>,
+            >>heap<< was renamed to >>spike<<.")
+  }
 
   if(is.null(list_of_types)){
     tmp_list_of_types <- list_of_types_maker(data, rounding_degrees = rounding_degrees)
@@ -205,7 +228,7 @@ How do you want to proceed: \n
   # 3: By refering to an exisiting intercept variable
   # (eg. if called "Int"): ~ X1 + Int + ...
   model_formula_org <- model_formula
-    if(is.null(model_formula)){
+  if(is.null(model_formula)){
     model_has_intercept <- TRUE
   }else{
     if(is.null(additional_variables)){
@@ -218,6 +241,7 @@ How do you want to proceed: \n
       random_intercept_check(model_formula) |
       any(names(which(constant_variables)) %in% all.vars(stats::delete.response(stats::terms(lme4::nobars(model_formula)))))
   }
+
   dataset_has_intercept <- any(constant_variables)
 
   if(model_has_intercept){
@@ -261,7 +285,8 @@ How do you want to proceed: \n
   variable_names_in_data <- colnames(my_data)
   fe <- extract_varnames(model_formula = model_formula,
                          constant_variables = constant_variables,
-                         variable_names_in_data = variable_names_in_data)
+                         variable_names_in_data = variable_names_in_data,
+                         data = data)
 
   # check if all fix effects covariates are available in the data set
 
@@ -270,7 +295,7 @@ How do you want to proceed: \n
                   paste(fe$fixedeffects_varname[!fe$fixedeffects_varname %in% names(my_data)],
                         collapse = " and "),
                   "<< in your data. How do you want to proceed: \n
-[c]ontinue with ignoring the model_formula an running a single level imputation
+[c]ontinue with ignoring the model_formula and running a single level imputation
 or [e]xiting the imputation?"))
 
     proceed <- readline("Type 'c' or 'e' into the console and press [enter]: ")
@@ -290,7 +315,7 @@ or [e]xiting the imputation?"))
                      paste(fe$randomeffects_varname[!fe$randomeffects_varname %in% names(my_data)],
                            collapse = " and "),
                      "<<in your data. How do you want to proceed: \n
-                     [c]ontinue with ignoring the model_formula an running a single level imputation
+                     [c]ontinue with ignoring the model_formula and running a single level imputation
                      or [e]xiting the imputation?"))
 
     proceed <- readline("Type 'c' or 'e' into the console and press [enter]: ")
@@ -315,7 +340,7 @@ or [e]xiting the imputation?"))
   if(length(fe$clID_varname) >= 2){
     writeLines("The package only supports one cluster ID in the model_formula. \n
 How do you want to proceed: \n
-                     [c]ontinue with ignoring the model_formula an running a single level imputation
+                     [c]ontinue with ignoring the model_formula and running a single level imputation
                      or [e]xiting the imputation?")
 
     proceed <- readline("Type 'c' or 'e' into the console and press [enter]: ")
@@ -329,7 +354,7 @@ How do you want to proceed: \n
   if(fe$clID_varname != "" & !(fe$clID_varname %in% names(my_data))){
     writeLines(paste("We didn't find", fe$clID_varname,
                      "in your data. How do you want to proceed: \n
-                     [c]ontinue with ignoring the model_formula an running a single level imputation
+                     [c]ontinue with ignoring the model_formula and running a single level imputation
                      or [e]xiting the imputation?"))
 
     proceed <- readline("Type 'c' or 'e' into the console and press [enter]: ")
@@ -383,6 +408,39 @@ How do you want to proceed: \n
     }
   }
 
+
+  ########## Check of the rounding_formula
+  if(!is.list(rounding_formula)){
+    rounding_formula <- list_of_rounding_formulas_maker(data, default = rounding_formula)
+  }
+  for(i in names(rounding_formula)){
+    ge <- extract_varnames(model_formula = rounding_formula[[i]],
+                           constant_variables = constant_variables,
+                           variable_names_in_data = variable_names_in_data,
+                           data = data)
+
+    # check if all fix effects covariates are available in the data set
+    tmp <- ge$fixedeffects_varname
+
+    if(all(tmp != "") & !all(tmp %in% names(my_data))){
+      writeLines(paste("We didn't find >>",
+                       paste(tmp[!tmp %in% names(my_data)],
+                             collapse = " and "),
+                       "<< in your data. How do you want to proceed: \n
+[c]ontinue with ignoring the rounding_formula and run a minimal rounding_formula
+or [e]xiting the imputation?"))
+
+      proceed <- readline("Type 'c' or 'e' into the console and press [enter]: ")
+      if(proceed == "e") return(NULL)
+      #if the rounding_formula is ignored the rounding d
+      ge$fixedeffects_varname <- i
+
+
+    }
+    rounding_formula[[i]] <- ge$fixedeffects_varname
+  }
+
+
   ###########################  MERGE SMALL CLUSTERS ####################
   if(fe$clID_varname != ""){
 
@@ -429,7 +487,7 @@ How do you want to proceed: \n
     if(length(tab_1) <= 2){
       writeLines("The package currently requires more than two clusters\n
                   How do you want to proceed: \n
-                  [c]ontinue with ignoring the model_formula an running a single level imputation
+                  [c]ontinue with ignoring the model_formula and running a single level imputation
                   or [e]xiting the imputation?")
 
       proceed <- readline("Type 'c' or 'e' into the console and press [enter]: ")
@@ -445,9 +503,14 @@ How do you want to proceed: \n
   ########################################   START THE IMPUTATION #####################
 
   # get the variable types:
+  rounding_degrees_tmp <- rounding_degrees
   types <- array(dim = ncol(my_data))
+
   for(j in 1:ncol(my_data)){
-     types[j] <- get_type(my_data[, j], rounding_degrees = rounding_degrees)
+    if(is.list(rounding_degrees)){
+      rounding_degrees_tmp <- rounding_degrees[[colnames(my_data)[j]]]
+    }
+     types[j] <- get_type(my_data[, j], rounding_degrees = rounding_degrees_tmp)
   }
 
   categorical <- types == "categorical"
@@ -505,9 +568,11 @@ How do you want to proceed: \n
                              nitt = nitt,
                              burnin = burnin,
                              thin = thin,
+                             pvalue = pvalue,
                              mn = mn,
                              heap = heap,
-                             rounding_degrees = rounding_degrees)
+                             rounding_degrees = rounding_degrees,
+                             rounding_formula = rounding_formula)
 
       my_data <- tmp$data_after
       gibbs[[paste("imputation", i, sep = "")]][[paste("cycle", l1, sep = "")]] <-
@@ -529,28 +594,53 @@ How do you want to proceed: \n
                                                               tmp_list_of_types == "interval"])
       #evaluate the imputed variables
       for(l2 in variables_to_impute){
+
+        to_evaluate <- my_data[is.na(data[, l2]), l2, drop = TRUE]
+        #for some variable types these imputed data coonet be directly evaluated by taking the mean.
+        # For example categorical variables (including binary variables which might not be 0-1 coded but
+        # for example "m"-"f".)
+
+        #in other variables (interval and rounded continuous) not only the missing variables,
+        # but all values which received a new value shall be evaluated.
+
+        #Therefore the types of the variables are needed
+
         if(is.null(list_of_types)){
-          tmp_type <- get_type(my_data[, l2], rounding_degrees = rounding_degrees)
+
+          if(is.list(rounding_degrees)){
+            rounding_degrees_tmp <- rounding_degrees[[l2]]
+          }else{
+            rounding_degrees_tmp <- rounding_degrees
+          }
+          tmp_type <- get_type(data[, l2], rounding_degrees = rounding_degrees_tmp)
         }else{
           tmp_type <- list_of_types[[l2]]
         }
+
+
         if(tmp_type == "roundedcont"){
-          to_evaluate <- my_data[data[, l2] %% 5    ==  0, l2, drop = TRUE]
-        }else{
-          to_evaluate <- my_data[is.na(data[, l2]), l2, drop = TRUE]
+          eval_index <-
+            apply(outer(decompose_interval(interval = data[, l2])[, "precise"], setdiff(rounding_degrees_tmp, 1), '%%') == 0, 1, any) |
+            !is.na(decompose_interval(interval = data[, l2])[, "lower_imprecise"]) | is.na(data[, l2])
+
+          to_evaluate <- my_data[eval_index, l2, drop = TRUE]
         }
 
+        if(tmp_type == "interval"){
+          eval_index <- !is.na(decompose_interval(interval = data[, l2])[, "lower_imprecise"]) | is.na(data[, l2])
+
+          to_evaluate <- my_data[eval_index, l2, drop = TRUE]
+        }
 
         if(tmp_type == "binary" |
            tmp_type == "categorical" | tmp_type == "ordered_categorical"){
-          to_evaluate_numerical <- as.numeric(as.factor(my_data[, l2, drop = TRUE]))
+          eval_index <- is.na(data[, l2])
+          to_evaluate <- as.numeric(as.factor(my_data[, l2]))[eval_index]
 
-        }else{
-          to_evaluate_numerical <- to_evaluate
         }
 
-        my_chainMean[l2, l1, i] <- mean(to_evaluate_numerical)
-        my_chainVar[l2, l1, i] <- stats::var(to_evaluate_numerical)
+        my_chainMean[l2, l1, i] <- mean(to_evaluate)
+        my_chainVar[l2, l1, i] <- stats::var(to_evaluate)
       }
     }
 
@@ -576,12 +666,21 @@ How do you want to proceed: \n
   # -------------- SET UP MIDS OBJECT  --------------
 
   imp_hmi <- stats::setNames(vector("list", ncol(data)), colnames(data))
+  method <- unlist(list_of_types_maker(data))
+  names(method) <- colnames(data)
+
   for(l2 in variables_to_impute){
 
     ##get the number of missing values in each incomplete variable
     # interval data are treated as missing
-    if(get_type(data[, l2], rounding_degrees = rounding_degrees) == "interval" |
-       get_type(data[, l2], rounding_degrees = rounding_degrees) == "roundedcont"){
+    if(is.list(rounding_degrees)){
+      rounding_degrees_tmp <- rounding_degrees[[l2]]
+    }else{
+      rounding_degrees_tmp <- rounding_degrees
+    }
+
+    if(get_type(data[, l2], rounding_degrees = rounding_degrees_tmp) == "interval" |
+       get_type(data[, l2], rounding_degrees = rounding_degrees_tmp) == "roundedcont"){
       data[, l2] <- NA
     }
     n_mis_j <- sum(is.na(data[, l2]))
@@ -602,9 +701,6 @@ How do you want to proceed: \n
   }
 
   nmis <- apply(is.na(data), 2, sum)
-  method <- rep("hmi", times = ncol(data)) # ROOM FOR IMPROVEMENTS
-
-  names(method) <- colnames(data)
 
   predictorMatrix <- matrix(0, nrow = ncol(data), ncol = ncol(data))
   rownames(predictorMatrix) <- colnames(data)
@@ -637,10 +733,20 @@ How do you want to proceed: \n
   # If the user wants to use mice as a pooling function, and not hmi_pool,
   # we conduct the pooling right away using the model_formula given by the user
   # ! Note: here we add something not found in mids-objects from mice !
-  if(pool_with_mice & !is.null(model_formula_org)){
+  tmp <- get_type(data[,fe$target_varname, drop = FALSE], rounding_degrees = rounding_degrees[[fe$target_varname]])
+  if(pool_with_mice & !is.null(model_formula_org) &
+     (tmp == "cont" | tmp == "semicont" | tmp == "roundedcont" | tmp == "interval" | tmp == "count")){
     if(fe$clID_varname == ""){ # if no cluster ID was found, run a single level model
-      midsobj$pooling <- mice::pool(with(data = midsobj,
-                                         expr = stats::lm(formula = formula(format(model_formula_org)))))
+
+      # mice::pool cannot deal with missing coefficients, so pool is only called,
+      #if noch coefficitent is NA.
+      mira <- with(data = midsobj,
+                   expr = stats::lm(formula = formula(format(model_formula_org))))
+
+      if(!any(unlist(lapply(mira$analyses, function(x) any(is.na(stats::coefficients(x))))))){
+        midsobj$pooling <- mice::pool(mira)
+      }
+
 
     }else{ # otherwise a multilevel model
       midsobj$pooling <- mice::pool(with(data = midsobj,

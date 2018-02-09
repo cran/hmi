@@ -9,11 +9,15 @@
 #' with \code{x} being the (numeric) observed value.
 #' @param y_imp A Vector from the class \code{interval} with the variable to impute.
 #' @param X_imp A data.frame with the fixed effects variables.
+#' @param pvalue A numeric between 0 and 1 denoting the threshold of p-values a variable in the imputation
+#' model should not exceed. If they do, they are excluded from the imputation model.
 #' @param rounding_degrees A numeric vector with the presumed rounding degrees.
 #' @return A n x 1 data.frame with the original and imputed values.
 #' Note that this function won't return \code{interval} data as its purpose is to
 #' "break" the interval answers into precise answers.
-imp_interval <- function(y_imp, X_imp,
+imp_interval <- function(y_imp,
+                         X_imp,
+                         pvalue = 0.2,
                          rounding_degrees = c(1, 10, 100, 1000)){
 
 
@@ -22,12 +26,20 @@ imp_interval <- function(y_imp, X_imp,
   X_imp <- cleanup(X_imp)
 
   # standardize X
-  X_imp_stand <- stand(X_imp, rounding_degrees = rounding_degrees)
-
-  missind <- is.na(y_imp)
+  X <- stand(X_imp, rounding_degrees = rounding_degrees)
 
   # has to be numeric, so it must only consists of precise observations
   decomposed <- decompose_interval(interval = y_imp)
+
+  # classify the data into the three types of observations:
+  # 1. precise data (like 3010 or 3017 - in interval notation "3010;3010", "3017;3017")
+  # 2. imprecise data (like "3000;3600")
+  # 3. missing data (NA - in interval notation "-Inf;Inf")
+  #get the indicator of the missing values
+  indicator_precise <- !is.na(decomposed[, "precise"])
+  indicator_imprecise <- !is.na(decomposed[, "lower_imprecise"])
+  indicator_missing <- is.infinite(decomposed[, "lower_general"]) &
+    is.infinite(decomposed[, "upper_general"])
 
   if(any(decomposed[, "lower_general"] > decomposed[, "upper_general"], na.rm = TRUE)){
     stop("in your interval covariate, some values in the lower bound exceed the upper bound.")
@@ -38,15 +50,16 @@ imp_interval <- function(y_imp, X_imp,
 
   y_mean <- mean(y_precise_template)
   y_sd <- stats::sd(y_precise_template)
+  #it can happen that in the template only identical values are present,
+  #leading to 0 variance.
+  if(y_sd <= 0) y_sd <- 1
   #add 1 to avoid an exactly zero intercept when modeling y_stand ~ x_stand
   # If both, X and Y, are standardized, the intercept
   #will be exactly 0 and thus not significantly different from 0.
   #So in order to avoid this variable to be removed later in the code, we add +1.
   decomposed_stand <- (decomposed - y_mean)/y_sd + 1
   y_precise_template_stand <- (y_precise_template - y_mean)/y_sd + 1
-  #if there are imprecise values only...
-  #if(all(is.na(y_precise_template))){
-  #... the template will be set up with a draw from between the borders
+
   low_sample <- decomposed_stand[, "lower_general"]
   up_sample  <- decomposed_stand[, "upper_general"]
 
@@ -54,86 +67,83 @@ imp_interval <- function(y_imp, X_imp,
                                       upper = up_sample,
                                       mean = y_precise_template_stand,
                                       sd = 1)
-  #}
 
-  ph_stand <- y_precise_template
-  tmp_0 <- data.frame(target = ph_stand)
+  ph <- y_precise_template
 
-  # run a linear model to get the suitable model.matrix for imputation of the NAs
-  xnames_0 <- paste("X", 1:ncol(X_imp_stand), sep = "")
-  tmp_0[xnames_0] <- X_imp_stand
-  lmstart <- stats::lm(target ~ 0 + . , data = tmp_0)
-  X_model_matrix_1 <- stats::model.matrix(lmstart)
 
-  tmp_1 <- data.frame(target = ph_stand)
-  xnames_1 <- paste("X", 1:ncol(X_model_matrix_1), sep = "")
-  tmp_1[, xnames_1] <- X_model_matrix_1
+  tmp_0_all <- data.frame(target = ph, X)
+  xnames_1 <- colnames(X)
 
-  reg_1 <- stats::lm(target ~ 0 + ., data = tmp_1)
+  tmp_formula <- paste("target~ 0 + ", paste(xnames_1, collapse = "+"), sep = "")
+  reg_1_all <- stats::lm(stats::formula(tmp_formula), data = tmp_0_all)
 
-  # remove variables with an NA coefficient
+  X_model_matrix_1_all <- stats::model.matrix(reg_1_all)
+  xnames_1 <- paste("X", 1:ncol(X_model_matrix_1_all), sep = "")
+  colnames(X_model_matrix_1_all) <- xnames_1
 
-  tmp_2 <- data.frame(target = ph_stand)
+  tmp_0_all <- data.frame(target = ph)
+  tmp_0_all[, xnames_1] <- X_model_matrix_1_all
 
-  xnames_2 <- xnames_1[!is.na(stats::coefficients(reg_1))]
-  tmp_2[, xnames_2] <- X_model_matrix_1[, !is.na(stats::coefficients(reg_1)), drop = FALSE]
+  #From this initial model matrix X_model_matrix_1_all
+  #now step by step irrelavant variables are removed.
 
-  reg_2 <- stats::lm(target ~ 0 + ., data = tmp_2)
-  X_model_matrix_2 <- stats::model.matrix(reg_2)
+  # Principally those models are based on precise observations only.
+  # But in some data situation, there might be no presice observations, only intervals;
+  # then all precise and interval data has to be used.
+  # Precise data can be use directly, from imprecise data, a draw from within their bounds is used
+  if(sum(indicator_precise) < 30){
+    use_indicator <- indicator_precise | indicator_imprecise
+  }else{
+    use_indicator <- indicator_precise
+  }
+  X_model_matrix_1_sub <- X_model_matrix_1_all[use_indicator, , drop = FALSE]
 
-  max.se <- abs(stats::coef(reg_2) * 3)
-  coef.std <- sqrt(diag(stats::vcov(reg_2)))
+  # The first step of the reduction is to remove variables having a non-measurable effect
+  # (e.g. due to colinearity) on y.
+  # tmp_1 shall include the covariates (like X_model_matrix) and additionally the target variable
+  ph_sub <- ph[use_indicator]
+  tmp_1_sub <- data.frame(target = ph_sub)
+  xnames_1 <- colnames(X_model_matrix_1_sub)
+  tmp_1_sub[, xnames_1] <- X_model_matrix_1_sub
 
-  includes_unimportants <- any(coef.std > max.se) | any(abs(stats::coef(reg_2)) < 1e-03)
-  counter <- 0
-  while(includes_unimportants & counter <= ncol(X_model_matrix_2)){
-    counter <- counter + 1
+  tmp_formula <- paste("target~ 0 + ", paste(xnames_1, collapse = "+"), sep = "")
+  reg_1_sub <- stats::lm(stats::formula(tmp_formula) , data = tmp_1_sub)
 
-    X_model_matrix_2 <- as.data.frame(X_model_matrix_2[,
-                                      coef.std <= max.se & stats::coef(reg_2) >= 1e-03, drop = FALSE])
-    if(ncol(X_model_matrix_2) == 0){
-      reg_2 <- stats::lm(ph_stand ~ 1)
+  #remove unneeded variables
+  X_model_matrix_1_sub <- X_model_matrix_1_sub[, !is.na(stats::coefficients(reg_1_sub)),
+                                               drop = FALSE]
+
+  # Remove insignificant variables from the imputation model
+  check <- TRUE
+  while(check){
+    tmp_1_sub <- data.frame(target = ph_sub)
+    xnames_1 <- colnames(X_model_matrix_1_sub)
+    tmp_1_sub[, xnames_1] <- X_model_matrix_1_sub
+    tmp_formula <- paste("target~ 0 + ", paste(xnames_1, collapse = "+"), sep = "")
+    reg_1_sub <- stats::lm(stats::formula(tmp_formula), data = tmp_1_sub)
+
+    pvalues <- summary(reg_1_sub)$coefficients[, 4]
+    insignificant_variables <- which(pvalues > pvalue)
+    most_insignificant <- insignificant_variables[which.max(pvalues[insignificant_variables])]
+
+    if(length(most_insignificant) == 0){
+      check <- FALSE
     }else{
-      reg_2 <- stats::lm(ph_stand ~ 0 + . , data = X_model_matrix_2)
+      X_model_matrix_1_sub <- stats::model.matrix(reg_1_sub)[, -most_insignificant, drop = FALSE]
     }
-
-    #remove regression parameters which have a very high standard error
-    max.se <- abs(stats::coef(reg_2) * 3)
-    coef.std <- sqrt(diag(stats::vcov(reg_2)))
-
-    includes_unimportants <- any(coef.std > max.se) | any(stats::coef(reg_2) < 1e-03)
   }
 
-  MM_1 <- as.data.frame(X_model_matrix_2)
-
-  tmp_3 <- data.frame(target = ph_stand)
-
-  xnames_3 <- names(MM_1)
-  tmp_3[, xnames_3] <- MM_1
-  # --preparing the ml estimation
-  # -define rounding intervals
+  tmp_2_all <- tmp_0_all[, colnames(tmp_1_sub), drop = FALSE]
 
   #####maximum likelihood estimation using starting values
   ####estimation of the parameters
 
-  lmstart2 <- stats::lm(target ~ 0 + ., data = tmp_3) # it might be more practical to run the model
-  #only based on the observed data, but this could cause some covariates in betastart2 to be dropped
+  lmstart2 <- stats::lm(target ~ 0 + ., data = tmp_1_sub)
   betastart2 <- as.vector(lmstart2$coef)
   sigmastart2 <- stats::sigma(lmstart2)
 
   #####maximum likelihood estimation using the starting values
 
-  function_generator <- function(para, X, lower, upper){
-    ret <- function(para){
-      ret_tmp <- negloglik2_intervalsonly(para = para, X = X,
-                            lower = lower, upper = upper)
-      return(ret_tmp)
-    }
-    return(ret)
-  }
-
-
-  #!!! THE STARTING VALUES CAN BE QUITE LOW
   starting_values <- c(betastart2, sigmastart2)
 
   ###exclude obs below (above) the 0.5% (99.5%) income quantile before maximizing
@@ -148,13 +158,10 @@ imp_interval <- function(y_imp, X_imp,
   keep <- (y_precise_template >= quants[1] & y_precise_template <= quants[2]) |
     is.na(y_precise_template)
 
-
-  negloglik2_generated <- function_generator(para = starting_values,
-                                             X = MM_1[keep, , drop = FALSE],
-                                             lower = decomposed_stand[, "lower_imprecise"][keep],
-                                             upper = decomposed_stand[, "upper_imprecise"][keep])
-
-  m2 <- stats::optim(par = starting_values, negloglik2_generated,
+  m2 <- stats::optim(par = starting_values, negloglik2_intervalsonly,
+                     X = as.matrix(tmp_2_all[, xnames_1, drop = FALSE])[keep, , drop = FALSE],
+                     lower_bounds = decomposed_stand[, "lower_imprecise"][keep],
+                     upper_bounds = decomposed_stand[, "upper_imprecise"][keep],
                      method = "BFGS",#alternative: "Nelder-Mead"
                      control = list(maxit = 10000), hessian = TRUE)
 
@@ -170,27 +177,22 @@ imp_interval <- function(y_imp, X_imp,
 
   Sigma_ml2 <- tryCatch(
     {
-
-      Sigma_ml2 <- solve(hess)
-
+      solve(hess)
     },
     error = function(cond) {
-      cat("Hessian matrix couldn't be inverted (in the imputation function of the rounded continuous variable).
-              Still, you should get a result, but which needs special attention.\n")
-      cat("Here's the original error message:\n")
-      cat(as.character(cond))
+      cat("Hessian matrix couldn't be inverted (in the imputation function for interval variables).
+          Still, you should get a result, but which needs special attention.\n")
 
-      Sigma_ml2 <- diag(diag(solve(Matrix::nearPD(hess)$mat)))
-      diag(Sigma_ml2) <- pmax(diag(Sigma_ml2), 1e-5)
+      tmp <- matrix(0, nrow = length(par_ml2), ncol = length(par_ml2))
+      diag(tmp) <- abs(par_ml2)/100
+      return(tmp)
 
     },
     warning = function(cond) {
-      cat("There seems to be a problem with the Hessian matrix in the imputation of the rounded continuous variable.\n")
-      cat("Here's the original warning message:\n")
+      cat("There seems to be a problem with the Hessian matrix in the imputation of the rounded continuous variable\n")
+      cat("Here is the original warning message:\n")
       cat(as.character(cond))
-
-      Sigma_ml2 <- solve(hess)
-
+      return(solve(hess))
     },
     finally = {
     }
@@ -205,20 +207,24 @@ imp_interval <- function(y_imp, X_imp,
 
 
   ####draw new parameters (because it is a Bayesian imputation)
+  #a negative draw for the variance parameter has to be rejected
+  Sigma_ml3 <- as.matrix(Matrix::nearPD(Sigma_ml2)$mat)
+  invalid <- TRUE
+  counter <- 0
+  while(invalid & counter < 1000){
+    counter <- counter + 1
+    pars <- mvtnorm::rmvnorm(1, mean = par_ml2, sigma = Sigma_ml3)
+    invalid <- pars[length(pars)] <= 0
+  }
 
-  pars <- mvtnorm::rmvnorm(1, mean = par_ml2, sigma = Sigma_ml2)
   #first eq on page 63 in Drechsler, Kiesl, Speidel (2015)
 
   # derive imputation model parameters from previously drawn parameters
-  beta_hat <- as.matrix(pars[1:(length(pars) - 1)], ncol = 1)
-  sigma_hat <- pars[length(pars)]
-
-  mymean <- as.matrix(MM_1) %*% beta_hat
-
-
   #The covariance matrix from equation (3)
-  Sigma <- sigma_hat^2
+  beta_hat <- as.matrix(pars[1:(length(pars) - 1)], ncol = 1)
+  Sigma <- pars[length(pars)]^2
 
+  mymean <- as.matrix(tmp_2_all[, xnames_1, drop = FALSE]) %*% beta_hat
 
   ###################################
   #BEGIN IMPUTING INTERVALL-DATA AND COMPLETELY MISSING DATA
@@ -238,10 +244,11 @@ imp_interval <- function(y_imp, X_imp,
   # resulting in NA draws for those observations.
   # The imputation for precise but rounded data follows in the next section.
   # precise and not rounded data need no impuation at all.
-  tnorm_draws <- msm::rtnorm(n = n, lower = expanded_lower,
-                                upper = expanded_upper,
-                                   mean = mymean,
-                                   sd = sqrt(Sigma))
+  tnorm_draws <- msm::rtnorm(n = n,
+                             lower = expanded_lower,
+                             upper = expanded_upper,
+                             mean = mymean,
+                             sd = sqrt(Sigma))
 
   #undo the standardization
   y_ret <- (tnorm_draws - 1) * y_sd + y_mean
