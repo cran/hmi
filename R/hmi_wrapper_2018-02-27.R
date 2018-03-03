@@ -104,19 +104,26 @@ hmi <- function(data,
                 thin = 20,
                 pvalue = 1,
                 mn = 1,
-                spike = 0,
+                spike = NULL,
                 heap = NULL,
                 rounding_degrees = NULL,
                 rounding_formula = ~ .,
                 list_of_types = NULL,
                 pool_with_mice = TRUE){
   options(error = expression(NULL))
-  if(is.null(heap)){
-    heap <- spike
-  }else{
-    warning("To avoid confusion with  >>heap<< when writing about the >>rounding_degrees>>,
-            >>heap<< was renamed to >>spike<<.")
+
+  if (!is.null(heap)) {
+    warning("argument heap is deprecated; please use spike instead.",
+            call. = FALSE) #In future version heap will be entirely replaced by spike.
+    if(is.null(spike)) spike <- heap
   }
+
+  if(is.null(spike)){
+    heap <- list_of_spikes_maker(data)
+  }else{
+    heap <- spike
+  }
+  if(is.null(heap)) heap <- 0
 
   if(is.null(list_of_types)){
     tmp_list_of_types <- list_of_types_maker(data, rounding_degrees = rounding_degrees)
@@ -156,6 +163,9 @@ hmi <- function(data,
             Remove those variables from your data.frame (e.g. by setting them to NULL).")
   }
 
+  if(!class(model_formula) %in% c("character", "formula", "NULL")){
+    stop("model_formula has to be a formula!")
+  }
   # recode "-Inf;Inf" in interval data to NA
   #intervals from -Inf to Inf shall be recoded as NA.
   for(j in 1:ncol(my_data)){

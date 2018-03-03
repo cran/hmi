@@ -1,7 +1,7 @@
-#' The function for hierarchical imputation of continuous variables.
+#' The function for hierarchical imputation of binary variables.
 #'
 #' The function is called by the wrapper.
-#' @param y_imp A vector with the variable to impute.
+#' @param y_imp A Vector with the variable to impute.
 #' @param X_imp A data.frame with the fixed effects variables.
 #' @param Z_imp A data.frame with the random effects variables.
 #' @param clID A vector with the cluster ID.
@@ -10,14 +10,14 @@
 #' Gibbs samples that shall be regarded as burnin.
 #' @param thin An integer to set the thinning interval range. If thin = 1,
 #' every iteration of the Gibbs-sampling chain will be kept. For highly autocorrelated
-#' chains, that are only examined by few iterations (say less than 1000).
+#' chains, that are only examined by few iterations (say less than 1000),
 #' @param pvalue A numeric between 0 and 1 denoting the threshold of p-values a variable in the imputation
 #' model should not exceed. If they do, they are excluded from the imputation model.
 #' @param rounding_degrees A numeric vector with the presumed rounding degrees.
 #' @return A list with 1. 'y_ret' the n x 1 data.frame with the original and imputed values.
 #' 2. 'Sol' the Gibbs-samples for the fixed effects parameters.
 #' 3. 'VCV' the Gibbs-samples for variance parameters.
-imp_cont_multi <- function(y_imp,
+imp_binary_multi <- function(y_imp,
                       X_imp,
                       Z_imp,
                       clID,
@@ -27,39 +27,56 @@ imp_cont_multi <- function(y_imp,
                       pvalue = 0.2,
                       rounding_degrees = c(1, 10, 100, 1000)){
 
+  # ----------------------------- preparing the y data ------------------
+  # stransform y_imp into a real binary with only zeros and ones (and NAs).
+  first_possibility <- utils::head(sort(y_imp), n = 1)
+  second_possibility <- utils::tail(sort(y_imp), n = 1)
+  y_binary <- data.frame(y = factor(y_imp, labels = c(0, 1)))
+
+
+  # If one category has less then two observations, no binary model can be estimated.
+  # So the imputation routines has to stop.
+  if(min(table(y_binary)) < 2){
+    stop("A binary (or maybe a semicontinuous) variable has less than two observations in one category.
+         Consider removing this variable
+         (or in the case of a semicontinuous variable, to specify it as continuous in the list_of_types (see ?hmi)).")
+  }
+
   # The missing indactor indicates, which values of y are missing.
-  missind <- is.na(y_imp)
+  missind <- is.na(y_binary)
   n <- length(y_imp)
 
-  # -----------------------------preparing the data ------------------
-  # -- standardise the covariates in X (which are numeric and no intercept)
   # ----------------------------- preparing the X and Z data ------------------
 
   # remove excessive variables
   X_imp <- cleanup(X_imp)
 
   # standardise the covariates in X (which are numeric and no intercept)
-  X_imp_stand <- stand(X_imp, rounding_degrees = rounding_degrees)
+  X <- stand(X_imp, rounding_degrees = rounding_degrees)
 
   # -- standardise the covariates in Z (which are numeric and no intercept)
   Z_imp <- cleanup(Z_imp)
-
   Z <- stand(Z_imp, rounding_degrees = rounding_degrees)
 
+
+  # Get the number of random effects variables
+  n.par.rand <- ncol(Z)
+  length.alpha <- length(table(clID)) * n.par.rand
+
+  # We need two design matrices. One for the model to get the imputation parameters
+  # which is based on the observed values only (obs).
+  # And secondly a design matrix for E(y_mis|X_mis) based on all observations (all).
+  # The later is more or less only the technical framework to get the imputed values.
+
   #define a place holder (ph)
-  ph <- sample_imp(y_imp)[, 1]
-
-  y_mean <- mean(ph, na.rm = TRUE)
-  y_sd <- stats::sd(ph, na.rm = TRUE)
-
-  ph <- (ph - y_mean)/y_sd + 1
+  ph <- sample_imp(y_binary[, 1])[, 1]
 
   YZ <- data.frame(target = ph, Z)
   #remove intercept variable
-  YZ <- YZ[, get_type(YZ) != "intercept", drop = FALSE]
+  YZ <- YZ[, apply(YZ, 2, get_type) != "intercept", drop = FALSE]
 
-  Z2 <- stats::model.matrix(stats::lm("target ~ 1 + .", data = YZ))
-
+  Z2 <- stats::model.matrix(stats::glm("target ~ 1 + .", data = YZ,
+                                       family = stats::binomial(link = "logit")))
   # ----------- set up a maximal model matrix with all possible relevant (dummy) variables -----
   # In the imputation model only actually relevant (dummy) variables shall be present.
   # THis is done by setting up a mirror of the initial model matrix.
@@ -70,10 +87,10 @@ imp_cont_multi <- function(y_imp,
 
 
   tmp_0_all <- data.frame(target = ph)
-  xnames_1 <- paste("X", 1:ncol(X_imp_stand), sep = "")
+  xnames_1 <- paste("X", 1:ncol(X), sep = "")
   znames_1 <- paste("Z", 1:ncol(Z2), sep = "")
 
-  tmp_0_all[, xnames_1] <- X_imp_stand
+  tmp_0_all[, xnames_1] <- X
   tmp_0_all[, znames_1] <- Z2
   tmp_0_all[, "clID"] <- clID
 
@@ -86,8 +103,11 @@ imp_cont_multi <- function(y_imp,
   # If both, an intercept variable and a categorical variable are present in the data,
   # One variable in the model is redundant. This is handled later in the code, so here
   # the default message from lmer is bothering and therefore suppressed.
-  suppressMessages(reg_1_all <- lme4::lmer(stats::formula(tmp_formula), data = tmp_0_all))
-
+  oldw <- getOption("warn")
+  options(warn = -1)
+  suppressMessages(reg_1_all <- lme4::glmer(stats::formula(tmp_formula),
+                                            family = stats::binomial("logit"), data = tmp_0_all))
+  options(warn = oldw)
 
   X_model_matrix_1_all <- stats::model.matrix(reg_1_all)
   xnames_1 <- paste("X", 1:ncol(X_model_matrix_1_all), sep = "")
@@ -116,7 +136,12 @@ imp_cont_multi <- function(y_imp,
                        "+(0+",
                        paste(znames_1, collapse = "+"),
                        "|clID)")
-  reg_1_sub <- lme4::lmer(stats::formula(tmp_formula) , data = tmp_1_sub)
+
+  oldw <- getOption("warn")
+  options(warn = -1)
+  suppressMessages(reg_1_sub <- lme4::glmer(stats::formula(tmp_formula),
+                                            family = stats::binomial("logit"), data = tmp_1_sub))
+  options(warn = oldw)
 
   #remove unneeded variables
   X_model_matrix_1_sub <- X_model_matrix_1_sub[, !is.na(lme4::fixef(reg_1_sub)),
@@ -131,23 +156,19 @@ imp_cont_multi <- function(y_imp,
     tmp_1_sub[, znames_1] <- Z2[!missind, , drop = FALSE]
     tmp_1_sub[, "clID"] <- clID[!missind]
 
-    if(length(xnames_1) == 0){
-      fixformula_lme <- stats::formula("target~ 1")
-    }else{
-      fixformula_lme <- stats::formula(paste("target~ 0+ ", paste(xnames_1, collapse = "+"), sep = ""))
-    }
+    tmp_formula <- paste("target ~ 0 +",
+                         paste(xnames_1, collapse = "+"),
+                         "+(0+",
+                         paste(znames_1, collapse = "+"),
+                         "|clID)")
 
-    if(length(znames_1) == 0){
-      randformula_lme <- stats::as.formula("~1|clID")
-    }else{
-      randformula_lme <- stats::as.formula(paste("~0+", paste(znames_1, collapse = "+"), "|clID",
-                                                 sep = ""))
-    }
+    oldw <- getOption("warn")
+    options(warn = -1)
+    suppressMessages(reg_1_sub <- lme4::glmer(stats::formula(tmp_formula),
+                                              family = stats::binomial("logit"), data = tmp_1_sub))
+    options(warn = oldw)
 
-    reg_1_sub <- nlme::lme(fixed = fixformula_lme,
-                           random = randformula_lme, data = tmp_1_sub)
-
-    pvalues <- stats::anova(reg_1_sub)$"p-value"
+    pvalues <- summary(reg_1_sub)$coefficients[, "Pr(>|z|)"]
     insignificant_variables <- which(pvalues > pvalue)
     most_insignificant <- insignificant_variables[which.max(pvalues[insignificant_variables])]
 
@@ -155,8 +176,13 @@ imp_cont_multi <- function(y_imp,
       check <- FALSE
     }else{
 
-      #get and update the model matrix:
-      X_model_matrix_1_sub <- X_model_matrix_1_sub[, -most_insignificant, drop = FALSE]
+      #.. drop the insignificant variable from the model.matrix, but only if at least 1 variable remains
+      tmp_MM <- stats::model.matrix(reg_1_sub)[, -most_insignificant, drop = FALSE]
+      if(ncol(tmp_MM) == 0){
+        check <- FALSE
+      }else{
+        X_model_matrix_1_sub <- tmp_MM
+      }
     }
   }
 
@@ -180,14 +206,17 @@ imp_cont_multi <- function(y_imp,
                                            sep = ""))
   }
 
-  # -------------- calling the gibbs sampler to get imputation parameters----
+  # -------------- calling the gibbs sampler to get imputation parameters ----
 
-  prior <- list(R = list(V = 1, nu = 0.002), # alternative: R = list(V = 1e-07, nu = -2)
-                G = list(G1 = list(V = diag(ncol(Z2)), nu = 0.002)))
+  #Fix residual variance R at 1
+  # cf. http://stats.stackexchange.com/questions/32994/what-are-r-structure-g-structure-in-a-glmm
+  prior <- list(R = list(V = 1, fix = TRUE),
+                G = list(G1 = list(V = diag(n.par.rand), nu = 0.002)))
 
-  #run MCMCglmm based on the data with observations not missing and variables not unimportant
-  MCMCglmm_draws <- MCMCglmm::MCMCglmm(fixed = fixformula, random = randformula,
+  MCMCglmm_draws <- MCMCglmm::MCMCglmm(fixed = fixformula,
+                                       random = randformula,
                                        data = YXZ_2_sub,
+                                       family = "categorical",
                                        verbose = FALSE, pr = TRUE, prior = prior,
                                        saveX = TRUE, saveZ = TRUE,
                                        nitt = nitt,
@@ -195,46 +224,52 @@ imp_cont_multi <- function(y_imp,
                                        burnin = burnin)
 
   tmp_2_all <- tmp_0_all[, colnames(YXZ_2_sub), drop = FALSE]
-  # Get the number of random effects variables
-  n.par.rand <- ncol(Z2)
-  ncluster <- length(table(YXZ_2_sub$clID))
-  length.alpha <- ncluster * n.par.rand
+  # correction. see:
+  # http://stats.stackexchange.com/questions/32994/what-are-r-structure-g-structure-in-a-glmm
+  k <- ((16*sqrt(3))/(15*pi))^2
 
-  pointdraws <- MCMCglmm_draws$Sol
+  pointdraws <- MCMCglmm_draws$Sol /sqrt(1 + k)
   xdraws <- pointdraws[, 1:ncol(X_model_matrix_1_sub), drop = FALSE]
-  #If a cluster cannot has random effects estimates, because there too few observations,
-  #we make them 0.
-  empty_cluster <- which(table(YXZ_2_sub$clID) == 0)
-  zdraws_pre <- pointdraws[, (ncol(X_model_matrix_1_sub) + 1):ncol(pointdraws), drop = FALSE]
-  #go through all random effects
-  #(e.g. first the random intercepts, then the random slope of X1, then the random slope of X5)
-  for(l1 in 1:n.par.rand){
-    #go through all clusters with 0 observations
-    for(l2 in empty_cluster){
-      zdraws_pre <- cbind(zdraws_pre[, 0:((l1-1)* ncluster + (l2-1))], 0,
-                          zdraws_pre[,  ((l1-1)* ncluster + l2):ncol(zdraws_pre)])
-    }
-  }
-
-  zdraws <- zdraws_pre
+  zdraws <- pointdraws[, ncol(X_model_matrix_1_sub) + 1:length.alpha, drop = FALSE]
   variancedraws <- MCMCglmm_draws$VCV
-  # the last column contains the variance (not standard deviation) of the residuals
 
   number_of_draws <- nrow(pointdraws)
-  select.record <- sample(1:number_of_draws, size = 1)
+  select_record <- sample(1:number_of_draws, size = 1)
 
   # -------------------- drawing samples with the parameters from the gibbs sampler --------
+
+  linkfunction <- boot::inv.logit
+
   ###start imputation
-  rand.eff.imp <- matrix(zdraws[select.record, ], ncol = n.par.rand)
 
-  fix.eff.imp <- matrix(xdraws[select.record, ], nrow = ncol(X_model_matrix_1_sub))
+  rand_eff_imp <- matrix(zdraws[select_record,],
+                           ncol = n.par.rand)
 
-  sigma.y.imp <- sqrt(variancedraws[select.record, ncol(variancedraws)])
+  fix_eff_imp <- matrix(xdraws[select_record, ], nrow = ncol(X_model_matrix_1_sub))
 
-  y_temp <- stats::rnorm(n, as.matrix(tmp_2_all[, xnames_1, drop = FALSE])  %*% fix.eff.imp +
-                      apply(Z2 * rand.eff.imp[clID, , drop = FALSE], 1, sum), sd = sigma.y.imp)
+  sigma_y_imp <- sqrt(variancedraws[select_record, ncol(variancedraws)])
 
-  y_ret <- data.frame(y_ret = ifelse(missind, (y_temp - 1) * y_sd + y_mean, y_imp))
+  linearpredictor <- stats::rnorm(n, as.matrix(tmp_2_all[, xnames_1, drop = FALSE]) %*% fix_eff_imp +
+                      apply(Z2 * rand_eff_imp[clID,], 1, sum), 0*sigma_y_imp)
+
+  #chances to draw a get a 1 (which means to get the second_possibility)
+  one_prob <- linkfunction(linearpredictor)
+
+  # determine whether an observation gets the 1 according the the chance
+  # calculated in one_prob.
+  indicator <- as.numeric(stats::runif(n) < one_prob)
+
+  #Initialising the returning matrix
+
+  y_ret <- as.data.frame(y_imp)
+  for(i in which(is.na(y_imp))){
+    if(indicator[i] == 0){
+      y_ret[i, 1] <- first_possibility
+    }else{
+      y_ret[i, 1] <- second_possibility
+    }
+  }
+  colnames(y_ret) <- "y_ret"
 
   # --------- returning the imputed data --------------
   ret <- list(y_ret = y_ret, Sol = xdraws, VCV = variancedraws)

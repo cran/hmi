@@ -57,7 +57,7 @@ imp_orderedcat_multi <- function(y_imp,
 
   YZ <- data.frame(target = ph, Z)
   #remove intercept variable
-  YZ <- YZ[, get_type(YZ) != "intercept", drop = FALSE]
+  YZ <- YZ[, apply(YZ, 2, get_type) != "intercept", drop = FALSE]
 
   Z2 <- stats::model.matrix(stats::lm("target ~ 1 + .", data = YZ))
 
@@ -159,14 +159,16 @@ imp_orderedcat_multi <- function(y_imp,
     if(length(most_insignificant) == 0){
       check <- FALSE
     }else{
-      #get and update the model matrix:
-      tmp <- stats::model.matrix(stats::formula(paste("target ~ 0 +",
-                                              paste(xnames_1, collapse = "+"))), data = tmp_1_sub)
-      #tmp <- stats::model.matrix(reg_1_sub) #if an additional intercept variable is included by the model
+      tmp <- stats::model.matrix(reg_1_sub) #if an additional intercept variable is included by the model
       #we cannot run stats::model.matrix(reg_1_sub)[, -most_insignificant]
       #Because most_insignificant refers to a situation without an intercept variable.
-      X_model_matrix_1_sub <- tmp[, !colnames(tmp) %in% names(most_insignificant), drop = FALSE]
 
+      tmp_MM <- tmp[, !colnames(tmp) %in% names(most_insignificant), drop = FALSE]
+      if(ncol(tmp_MM) == 0){
+        check <- FALSE
+      }else{
+        X_model_matrix_1_sub <- tmp_MM
+      }
     }
   }
 

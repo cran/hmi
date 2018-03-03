@@ -131,7 +131,13 @@ imp_orderedcat_single <- function(y_imp,
       tmp <- stats::model.matrix(reg_1_sub) #if an additional intercept variable is included by the model
       #we cannot run stats::model.matrix(reg_1_sub)[, -most_insignificant]
       #Because most_insignificant refers to a situation without an intercept variable.
-      X_model_matrix_1_sub <- tmp[, !colnames(tmp) %in% names(most_insignificant), drop = FALSE]
+
+      tmp_MM <- tmp[, !colnames(tmp) %in% names(most_insignificant), drop = FALSE]
+      if(ncol(tmp_MM) == 0){
+        check <- FALSE
+      }else{
+        X_model_matrix_1_sub <- tmp_MM
+      }
     }
   }
 

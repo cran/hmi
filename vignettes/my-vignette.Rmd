@@ -211,11 +211,6 @@ The example uses the data set `CO2` about the "Carbon Dioxide Uptake in Grass Pl
 `hmi` draws similar conclusions. A difference would be that we call Factors with 2 levels "binary". Also the variable `conc` would be considered to be a special case of a continuous variable - a rounded continuous because every value of the ambient carbon dioxide concentration is divisible by at least 5.
 
 You can see in advance how variables will be treated internally by `hmi` if you call the `list_of_types_maker`. For example `example_list_of_types <- list_of_types_maker(CO2)` gives you the following list:
-<!--
-source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2018-01-31.R')
-example_list_of_types <- list_of_types_maker(CO2)
-example_list_of_types
--->
 ```{r}
 ## $Plant
 ## [1] "ordered_categorical"
@@ -279,8 +274,6 @@ The most simple call of `hmi` would be be:
 ```{r echo = FALSE, message = FALSE, cache = TRUE}
 library("mice")
 library("hmi")
-#source('C:/Users/Matthias/Documents/hmi/R/hmi_wrapper_2018-01-31.R')
-#source('C:/Users/Matthias/Documents/hmi/R/hmi_imp_cont_single_2018-02-02.R')
 ```
 
 ```{r eval = FALSE, message = FALSE, cache = TRUE}
@@ -329,8 +322,6 @@ result_multi <- hmi(data = ex, model_formula = Reaction ~ 1 + Days + (1 + Days |
 
 ```{r eval = TRUE, echo = FALSE, results = "hide", message = FALSE, cache = TRUE}
 library("hmi")
-#source('C:/Users/Matthias/Documents/hmi/R/hmi_imp_cont_multi_2018-02-03.R')
-#source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2018-01-31.R')
 ex
 set.seed(1)
 result_multi <- hmi(data = ex, model_formula = Reaction ~ 1 + Days + (1 + Days | Subject), maxit = 1)
@@ -380,7 +371,6 @@ hmi_pool(mids = result_multi, analysis_function = my_analysis)
 ```
 ```{r eval = TRUE, echo = FALSE, message = FALSE, cache = TRUE}
 library("hmi")
-#source('C:/Users/Matthias/Documents/hmi/R/hmi_smallfunctions_2018-01-31.R')
  my_analysis <- function(complete_data){
   # In this list, you can write all the parameters you are interested in.
   # Those will be averaged.

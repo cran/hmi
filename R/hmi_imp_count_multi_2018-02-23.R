@@ -55,7 +55,7 @@ imp_count_multi <- function(y_imp,
 
   YZ <- data.frame(target = ph, Z)
   #remove intercept variable
-  YZ <- YZ[, get_type(YZ) != "intercept", drop = FALSE]
+  YZ <- YZ[, apply(YZ, 2, get_type) != "intercept", drop = FALSE]
 
   Z2 <- stats::model.matrix(stats::lm("target ~ 1 + .", data = YZ))
   # ----------- set up a maximal model matrix with all possible relevant (dummy) variables -----
@@ -156,8 +156,14 @@ imp_count_multi <- function(y_imp,
     if(length(most_insignificant) == 0){
       check <- FALSE
     }else{
-      #get and update the model matrix:
-      X_model_matrix_1_sub <- X_model_matrix_1_sub[, -most_insignificant, drop = FALSE]
+
+      #.. drop the insignificant variable from the model.matrix, but only if at least 1 variable remains
+      tmp_MM <- stats::model.matrix(reg_1_sub)[, -most_insignificant, drop = FALSE]
+      if(ncol(tmp_MM) == 0){
+        check <- FALSE
+      }else{
+        X_model_matrix_1_sub <- tmp_MM
+      }
     }
   }
 

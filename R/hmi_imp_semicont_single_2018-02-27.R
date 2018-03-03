@@ -14,22 +14,25 @@
 #' @export
 imp_semicont_single <- function(y_imp,
                         X_imp,
-                        heap = 0,
+                        heap = NULL,
                         pvalue = 0.2,
                         rounding_degrees = c(1, 10, 100, 1000)){
+
+  if(is.null(heap)){
+    heap <-  list_of_spikes_maker(data.frame(y_imp))$y_imp
+  }
+
+  if(is.null(heap)){
+    heap <- 0
+  }
 
   tmp_data <- cbind(y_imp, X_imp)
   n <- nrow(tmp_data)
 
-  #the missing indactor indicates, which values of y are missing.
-  mis_indicator <- is.na(y_imp)
-  #get the defaults values for heap
-  if(is.null(heap)) heap <- 0
-
   # transform y_imp into a binary variable,
   # with 0 representing a heaped value and 1 a non heaped value
   # NA values will remain NA.
-  y_binary <- y_imp
+  y_binary <- factor(rep(NA, length(y_imp)), levels = c(0, 1))
 
   # The observations beeing heaped and not NA...
   condition_0 <- (y_imp == heap) & !is.na(y_imp)
@@ -59,12 +62,15 @@ imp_semicont_single <- function(y_imp,
                             pvalue = pvalue,
                             rounding_degrees = rounding_degrees)
 
-  # set up the final i-th imputation vector
-  y_tmp <- data.frame(what_method)
+  # set the final value of y:
+  # the observations with method 1 (continuous (non hepead) observation)
+  # get the continuously imputed values
+  y_tmp <- array(NA, dim = length(y_imp))
+  y_tmp[what_method == 1] <- y1_imp[, 1]
 
-  # the data points where the binary imputation said, that they shall be (or already are) continuous,
-  # get the value of the continuous imputation
-  y_tmp[what_method == 1, 1] <- y1_imp
+  # the observations with method 0 (heaped observation)
+  # get the heap
+  y_tmp[what_method == 0] <- heap
 
   y_ret <- data.frame(y_ret = y_tmp)
 

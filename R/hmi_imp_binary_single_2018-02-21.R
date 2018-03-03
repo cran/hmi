@@ -1,27 +1,31 @@
 #' The function for imputation of binary variables.
 #'
 #' The function is called by the wrapper.
-#' @param y_imp A vector with the variable to impute.
+#' @param y_imp A Vector with the variable to impute.
 #' @param X_imp A data.frame with the fixed effects variables.
-#' @param nitt An integer defining number of MCMC iterations (see MCMCglmm).
-#' @param burnin burnin A numeric value between 0 and 1 for the desired percentage of
-#' Gibbs samples that shall be regarded as burnin.
-#' @param thin An integer to set the thinning interval range. If thin = 1,
-#' every iteration of the Gibbs-sampling chain will be kept. For highly autocorrelated
-#' chains, that are only examined by few iterations (say less than 1000).
 #' @param pvalue A numeric between 0 and 1 denoting the threshold of p-values a variable in the imputation
 #' model should not exceed. If they do, they are excluded from the imputation model.
 #' @param rounding_degrees A numeric vector with the presumed rounding degrees.
-#' @return A list with 1. 'y_ret' the n x 1 data.frame with the original and imputed values.
-#' 2. 'Sol' the Gibbs-samples for the fixed effects parameters.
-#' 3. 'VCV' the Gibbs-samples for variance parameters.
-imp_count_single <- function(y_imp,
-                       X_imp,
-                       nitt = 22000,
-                       burnin = 2000,
-                       thin = 20,
-                       pvalue = 0.2,
-                       rounding_degrees = c(1, 10, 100, 1000)){
+#' @return A n x 1 data.frame with the original and imputed values.
+imp_binary_single <- function(y_imp,
+                      X_imp,
+                      pvalue = 0.2,
+                      rounding_degrees = c(1, 10, 100, 1000)){
+
+
+  # ----------------------------- preparing the y data ------------------
+  # stransform y_imp into a real binary with only zeros and ones (and NAs).
+  first_possibility <- utils::head(sort(y_imp), n = 1)
+  second_possibility <- utils::tail(sort(y_imp), n = 1)
+  y_binary <- data.frame(target = factor(y_imp, labels = c(0, 1)))
+
+  # If one category has less then two observations, no binary model can be estimated.
+  # So the imputation routines has to stop.
+  if(min(table(y_binary)) < 2){
+    stop("A binary (or maybe a semicontinuous) variable has less than two observations in one category.
+         Consider removing this variable
+         (or in the case of a semicontinuous variable, to specify it as continuous in the list_of_types (see ?hmi)).")
+  }
 
   # ----------------------------- preparing the X data ------------------
   # remove excessive variables
@@ -31,9 +35,8 @@ imp_count_single <- function(y_imp,
   X <- stand(X_imp, rounding_degrees = rounding_degrees)
 
   #the missing indactor indicates, which values of y are missing.
-  missind <- is.na(y_imp)
-
-  n <- length(y_imp)
+  missind <- is.na(y_binary)
+  n <- length(y_binary)
 
   # ----------- set up a maximal model matrix with all possible relevant (dummy) variables -----
   # In the imputation model only actually relevant (dummy) variables shall be present.
@@ -44,14 +47,14 @@ imp_count_single <- function(y_imp,
   # to those variables, left in the reduced mirror model matrix.
 
   #define a place holder (ph)
-  ph <- sample_imp(y_imp)[, 1]
+  ph <- sample_imp(y_binary[, 1])[, 1]
 
   tmp_0_all <- data.frame(target = ph, X)
   xnames_1 <- colnames(X)
 
   tmp_formula <- paste("target~ 0 + ", paste(xnames_1, collapse = "+"), sep = "")
   reg_1_all <- stats::glm(stats::formula(tmp_formula), data = tmp_0_all,
-                          family = "poisson")
+                          family = stats::binomial(link = "logit"))
 
   X_model_matrix_1_all <- stats::model.matrix(reg_1_all)
   xnames_1 <- paste("X", 1:ncol(X_model_matrix_1_all), sep = "")
@@ -67,7 +70,7 @@ imp_count_single <- function(y_imp,
 
   #first step of the reduction is to remove variables having a NA-effect (e.g. due to colinearity) on y
   #tmp_1 shall include the covariates (like X_model_matrix) and additionally the target variable
-  ph_sub <- y_imp[!missind]
+  ph_sub <- y_binary[!missind, , drop = FALSE]
   tmp_1_sub <- data.frame(target = ph_sub)
   xnames_1 <- colnames(X_model_matrix_1_sub)
   tmp_1_sub[, xnames_1] <- X_model_matrix_1_sub
@@ -75,11 +78,11 @@ imp_count_single <- function(y_imp,
   tmp_formula <- paste("target~ 0 + ", paste(xnames_1, collapse = "+"), sep = "")
 
   reg_1_sub <- stats::glm(stats::formula(tmp_formula), data = tmp_1_sub,
-                          family = "poisson")
+                          family = stats::binomial(link = "logit"))
 
   #remove unneeded variables
   X_model_matrix_1_sub <- X_model_matrix_1_sub[, !is.na(stats::coefficients(reg_1_sub)),
-                                               drop = FALSE]
+                       drop = FALSE]
 
   # Remove insignificant variables from the imputation model
   check <- TRUE
@@ -89,7 +92,7 @@ imp_count_single <- function(y_imp,
     tmp_1_sub[, xnames_1] <- X_model_matrix_1_sub
     tmp_formula <- paste("target~ 0 + ", paste(xnames_1, collapse = "+"), sep = "")
     reg_1_sub <- stats::glm(stats::formula(tmp_formula), data = tmp_1_sub,
-                            family = "poisson")
+                              family = stats::binomial(link = "logit"))
 
     pvalues <- summary(reg_1_sub)$coefficients[, 4]
     insignificant_variables <- which(pvalues > pvalue)
@@ -98,62 +101,52 @@ imp_count_single <- function(y_imp,
     if(length(most_insignificant) == 0){
       check <- FALSE
     }else{
-      X_model_matrix_1_sub <- stats::model.matrix(reg_1_sub)[, -most_insignificant, drop = FALSE]
+      #.. drop the insignificant variable from the model.matrix, but only if at least 1 variable remains
+      tmp_MM <- stats::model.matrix(reg_1_sub)[, -most_insignificant, drop = FALSE]
+      if(ncol(tmp_MM) == 0){
+        check <- FALSE
+      }else{
+        X_model_matrix_1_sub <- tmp_MM
+      }
     }
+
   }
 
   tmp_2_all <- tmp_0_all[, colnames(tmp_1_sub), drop = FALSE]
   tmp_2_all$target[missind] <- NA
 
-  # -------------- calling the gibbs sampler to get imputation parameters----
+  everything <- mice::mice(data = tmp_2_all, m = 1,
+                     method = "logreg",
+                     predictorMatrix = (1 - diag(1, ncol(tmp_2_all))),
+                     visitSequence = (1:ncol(tmp_2_all))[apply(is.na(tmp_2_all),2,any)],
+                     post = vector("character", length = ncol(tmp_2_all)),
+                     defaultMethod = "logreg",
+                     maxit = 10,
+                     diagnostics = TRUE,
+                     printFlag = FALSE,
+                     seed = NA,
+                     imputationMethod = NULL,
+                     defaultImputationMethod = NULL,
+                     data.init = NULL)
 
-  fixformula <- stats::formula(paste("target~", paste(xnames_1, collapse = "+"), "- 1",
-                                     sep = ""))
+  indicator <- as.numeric(as.character(mice::complete(everything, 1)$target))
 
-  prior <- list(R = list(V = 1e-07, nu = -2))
+  #Initialising the returning vector
+  y_ret <- as.data.frame(y_imp)
 
-  MCMCglmm_draws <- MCMCglmm::MCMCglmm(fixformula, data = tmp_1_sub,
-                                       verbose = FALSE, pr = TRUE, prior = prior,
-                                       family = "poisson",
-                                       saveX = TRUE,
-                                       nitt = nitt,
-                                       thin = thin,
-                                       burnin = burnin)
-
-  pointdraws <- MCMCglmm_draws$Sol
-  xdraws <- pointdraws[, 1:ncol(X_model_matrix_1_sub), drop = FALSE]
-  variancedraws <- MCMCglmm_draws$VCV
-  # the last column contains the variance (not standard deviation) of the residuals
-
-  number_of_draws <- nrow(pointdraws)
-  select.record <- sample(1:number_of_draws, size = 1)
-
-  # -------------------- drawing samples with the parameters from the gibbs sampler --------
-  ###start imputation
-
-  fix.eff.imp <- matrix(xdraws[select.record, ], nrow = ncol(X_model_matrix_1_sub))
-
-  sigma.y.imp <- sqrt(variancedraws[select.record, ncol(variancedraws)])
-
-
-  lambda <- exp(stats::rnorm(n, as.matrix(tmp_2_all[, xnames_1, drop = FALSE]) %*% fix.eff.imp, sigma.y.imp))
-
-  # note: the maximum lambda is something about 2.14e9
-  if(max(lambda) > 2.14e9) {
-    stop("Imputation of count variable failed due to a too high value of lambda.
-This can occur if an observation in your data is an outlier regarding the covariates of the imputation model.
-What again can be caused by highly variant imputation models for these covariates due high missing rates.")
+  #ifelse(indicator == 1, first_possibility, second_possibility) doesn't work with factors
+  # in a way I would need it.
+  for(i in which(is.na(y_imp))){
+    if(indicator[i] == 0){
+      y_ret[i, 1] <- first_possibility
+    }else{
+      y_ret[i, 1] <- second_possibility
+    }
   }
-  y_proposal <- stats::rpois(n, lambda)
-  y_tmp <- ifelse(missind, y_proposal, y_imp)
-  y_ret <- data.frame(y_ret = y_tmp)
 
-
-  # --------- returning the imputed data --------------
-  ret <- list(y_ret = y_ret, Sol = xdraws, VCV = variancedraws)
-  return(ret)
+  colnames(y_ret) <- "y_ret"
+  return(y_ret)
 }
-
 
 
 # Generate documentation with devtools::document()

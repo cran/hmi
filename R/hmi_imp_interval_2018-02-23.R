@@ -129,7 +129,13 @@ imp_interval <- function(y_imp,
     if(length(most_insignificant) == 0){
       check <- FALSE
     }else{
-      X_model_matrix_1_sub <- stats::model.matrix(reg_1_sub)[, -most_insignificant, drop = FALSE]
+      #.. drop the insignificant variable from the model.matrix, but only if at least 1 variable remains
+      tmp_MM <- stats::model.matrix(reg_1_sub)[, -most_insignificant, drop = FALSE]
+      if(ncol(tmp_MM) == 0){
+        check <- FALSE
+      }else{
+        X_model_matrix_1_sub <- tmp_MM
+      }
     }
   }
 

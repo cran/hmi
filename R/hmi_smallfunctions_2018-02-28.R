@@ -57,7 +57,6 @@ get_type <- function(variable,
   }
 
 
-
   if(length(unique(variable[!is.na(variable)])) == 1){
     type <- "intercept"
     return(type)
@@ -107,9 +106,9 @@ get_type <- function(variable,
     if(is.numeric(variable)){
       type <- "cont"
 
-      # if there is no difference between a variable and their as.integer()-result,
+      # if there is no difference between a variable and their rounding result,
       # it is considered to be an integer...
-      if(max(abs(variable - as.integer(variable)), na.rm = TRUE) == 0){
+      if(max(abs(variable - round(variable)), na.rm = TRUE) == 0){
         type <- "count"
 
         #... but not if too many categories are available...
@@ -264,13 +263,15 @@ list_of_types_maker <- function(data, rounding_degrees = NULL){
 #' Function to get all factors
 #'
 #' Function to get all factors (not limited to prime factors) of an integer.
-#' @param x An integer.
+#' @param x A single integer; no vector.
 #' @return A numeric vector with the factors
 #' @references based on stackoverflow.com/questions/6424856 "R Function for returning ALL factors"
 #'  answer by Chase
 factors <- function(x){
   if(!is.numeric(x)) return(NA)
+  if(length(x) != 1) return(NA)
   if(is.na(x)) return(NA)
+  if(is.infinite(x)) return(NA)
   if(x %% 1 != 0) return(NA)
   x <- as.integer(x)
   div <- seq_len(abs(x))
@@ -367,7 +368,7 @@ list_of_rounding_degrees_maker <- function(data){
 }
 
 
-#' Helps the user to make a list of rounding formulas for the rounding degress
+#' Helps the user to make a list of rounding formulas for the rounding degrees
 #'
 #' In \code{hmi} the user can add a list of heaps. This function gives him a framework
 #' with suggestions. Of course the user can make changes by herself/himself afterwards.
@@ -479,7 +480,7 @@ hmi_pool <- function(mids, analysis_function){
 #' @param PSI_in_negloglik The data.frame of covariates explaining G, the latent rounding tendency.
 #' Without the target variable.
 #' @param vars_in_psi A vector with the names of the variables that should be used in PSI
-#' (the variables explaning the latent rounding tendency G), without the intercept and Y.
+#' (the variables explaining the latent rounding tendency G), without the intercept and Y.
 #' @param y_precise_stand A vector of the precise (and standardized) observations from the target variable.
 #' @param lower_bounds The lower bounds of an interval variable.
 #' @param upper_bounds The upper bounds of an interval variable.
@@ -1290,7 +1291,7 @@ interval2idf <- function(interval){
 #'
 #' This function is the path from the linLIR package (Wiencierz, 2012) to this hmi package.
 #' @param idf an interval data frame (idf-object).
-#' @return interval an \code{interval}.
+#' @return A \code{data.frame} where the interval variables are stored as \code{interval} objects.
 #' @export
 idf2interval <- function(idf){
   ret <- data.frame(matrix(nrow = idf$n, ncol = length(idf) - 1))
@@ -1320,7 +1321,7 @@ idf2interval <- function(idf){
 #' @param ylab A title for the y axis: see \code{title}.
 #' @param xlim Numeric vectors of length 2, giving the x coordinate ranges.
 #' @param ylim Numeric vectors of length 2, giving the y coordinate ranges.
-#' @param sort A character specifiying how the values should be sorted if only one variable is to be plotted.
+#' @param sort A character specifying how the values should be sorted if only one variable is to be plotted.
 #' By default they are sorted according to their position in the data set.
 #' Currently, the only option to chose (\code{sort = "mostprecise_increasing"}) is to sort them by their length of the interval they represent,
 #' and within equal lengths increasing with the lower bound.
@@ -1455,22 +1456,6 @@ table.default <- function(x, ...) {
   return(base::table(x, ...))
 }
 
-#' Tabulating only interval objects
-#'
-#' Function to only tabulate interval objects
-#' @param x In its most save way, \code{x} is an object from class \code{interval}.
-#' @param ... Other parameters passed to \code{table}.
-#' @return A table.
-#' @export
-table_interval <- function(x, ...){
-  tab <- table(unclass(x), ...)
-  tmp <- decompose_interval(as.interval(names(tab)))
-  interval_lengths <- tmp[, "upper_general"] -
-    tmp[, "lower_general"]
-  tab <- tab[order(interval_lengths, tmp[, "lower_general"])]
-  return(tmp)
-}
-
 
 #' Adding function
 #'
@@ -1510,7 +1495,7 @@ table_interval <- function(x, ...){
 #' @rdname interval-multiply
 "*.interval" <- function(interval, x){
   tmp <- split_interval(interval) * split_interval(x)
-  generate_interval(lower = tmp[, 1], upper = tmp[, 2])
+  return(generate_interval(lower = tmp[, 1], upper = tmp[, 2]))
 }
 
 #' Dividing function
@@ -1951,7 +1936,7 @@ imputationcycle <- function(data_before,
     if(tmp_type == "roundedcont"){
       #yet, we don't have a multilevel imputation for rounded incomes
 
-      #Set up the data.frame including the variable explaning G, the latent rounding tendency
+      #Set up the data.frame including the variable explaining G, the latent rounding tendency
       vars_usable <- rounding_formula[[l2]]
       vars_usable <- vars_usable[vars_usable %in% colnames(data_before)]
       PSI <- data_before[, vars_usable, drop = FALSE]
