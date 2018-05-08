@@ -11,7 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 
-<meta name="date" content="2018-03-03" />
+<meta name="date" content="2018-05-08" />
 
 <title>hmi: hierarchical multiple imputation</title>
 
@@ -71,7 +71,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <h4 class="author"><em>Matthias Speidel</em></h4>
 <h4 class="author"><em>Jörg Drechsler</em></h4>
 <h4 class="author"><em>Shahab Jolani</em></h4>
-<h4 class="date"><em>2018-03-03</em></h4>
+<h4 class="date"><em>2018-05-08</em></h4>
 
 
 
@@ -233,16 +233,14 @@ result &lt;-<span class="st"> </span><span class="kw">hmi</span>(ex)</code></pre
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(<span class="st">&quot;hmi&quot;</span>)
 <span class="kw">set.seed</span>(<span class="dv">1</span>)
 result &lt;-<span class="st"> </span><span class="kw">hmi</span>(ex)</code></pre></div>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">plot</span>(result, <span class="dt">layout =</span> <span class="kw">c</span>(<span class="dv">2</span>, <span class="dv">1</span>))</code></pre></div>
-<!-- The plots show no extreme results to cause worries. -->
-<p>Another useful tool from <code>mice</code> is the <code>complete</code> function. It gives you a data set with the original and imputed values. Here we show the first rows of the completed data set:</p>
+<p>A useful tool from <code>mice</code> is the <code>complete</code> function. It gives you a data set with the original and imputed values. Here we show the first rows of the completed data set:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">head</span>(<span class="kw">complete</span>(result, <span class="dv">1</span>))</code></pre></div>
 <pre><code>##   Reaction Days Subject
 ## 1 249.5600    0     308
 ## 2 258.7047    1     308
 ## 3 250.8006    2     308
 ## 4 321.4398    3     308
-## 5 161.2648    4     308
+## 5 313.1352    4     308
 ## 6 414.6901    5     308</code></pre>
 </div>
 <div id="multilevel-example" class="section level3">
@@ -270,20 +268,41 @@ result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span cla
 <p>Here we get the message that “Intercept” was not found in the data and we can decide whether we want to stop the imputation routine or continue with a single level imputation. The reason for this message is the strict control in <code>hmi</code> whether your model and your data fit together. So if you are sure that you want to have a intercept variable in your model, include one into your data.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">set.seed</span>(<span class="dv">1</span>)
 result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span class="dt">data =</span> ex, <span class="dt">model_formula =</span> Reaction <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">|</span><span class="st"> </span>Subject), <span class="dt">maxit =</span> <span class="dv">1</span>)</code></pre></div>
+<pre><code>## Warning: 'cBind' is deprecated.
+##  Since R version 3.2.0, base's cbind() should work fine with S4 objects</code></pre>
+<pre><code>## Warning in lme4::glmer(formula = format(model_formula_org), family =
+## family): calling glmer() with family=gaussian (identity link) as a shortcut
+## to lmer() is deprecated; please call lmer() directly
+
+## Warning in lme4::glmer(formula = format(model_formula_org), family =
+## family): calling glmer() with family=gaussian (identity link) as a shortcut
+## to lmer() is deprecated; please call lmer() directly
+
+## Warning in lme4::glmer(formula = format(model_formula_org), family =
+## family): calling glmer() with family=gaussian (identity link) as a shortcut
+## to lmer() is deprecated; please call lmer() directly
+
+## Warning in lme4::glmer(formula = format(model_formula_org), family =
+## family): calling glmer() with family=gaussian (identity link) as a shortcut
+## to lmer() is deprecated; please call lmer() directly
+
+## Warning in lme4::glmer(formula = format(model_formula_org), family =
+## family): calling glmer() with family=gaussian (identity link) as a shortcut
+## to lmer() is deprecated; please call lmer() directly</code></pre>
 <p>Now the imputation is complete and with the resulting <code>mids</code>-object you could do all the things described in the section above.</p>
 <p>Here we were especially interested in multilevel models, so we want to run our analysis model on the imputed data. By this it is meant that the model is run on every of the <code>M</code> completed data set and then the results are combined according to Rubin’s combining rules <span class="citation">(Rubin 1987)</span>.</p>
 <p><code>mice</code> has the functions <code>fit</code> and <code>pool</code> to do this. But only certain parameters of your model are pooled.</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">pool</span>(<span class="kw">with</span>(<span class="dt">data =</span> result_multi, <span class="dt">expr =</span> <span class="kw">lmer</span>(Reaction <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">|</span><span class="st"> </span>Subject))))</code></pre></div>
-<pre><code>## Call: pool(object = with(data = result_multi, expr = lmer(Reaction ~ 
-##     1 + Days + (1 + Days | Subject))))
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">result_multi<span class="op">$</span>pooling</code></pre></div>
+<pre><code>## Call: mice::pool(object = with(data = midsobj, expr = lme4::glmer(formula = format(model_formula_org), 
+##     family = family)))
 ## 
 ## Pooled coefficients:
 ## (Intercept)        Days 
-##   249.67007    10.94977 
+##   250.36152    10.86148 
 ## 
 ## Fraction of information about the coefficients missing due to nonresponse: 
 ## (Intercept)        Days 
-##  0.06929138  0.05734534</code></pre>
+##   0.1738207   0.1878328</code></pre>
 <p><code>hmi_pools</code> tries to give a flexible alternative to this function. The function needs two things</p>
 <ol style="list-style-type: decimal">
 <li>your multiple imputed data sets (the <code>mids</code> object you created with <code>hmi</code>)</li>
@@ -302,20 +321,20 @@ result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span cla
   <span class="co"># the random slopes variance and their covariance</span>
   my_model &lt;-<span class="st"> </span><span class="kw">lmer</span>(Reaction <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">|</span><span class="st"> </span>Subject), <span class="dt">data =</span> complete_data)
 
-  parameters_of_interest[[<span class="dv">1</span>]] &lt;-<span class="st"> </span><span class="kw">fixef</span>(my_model)[<span class="dv">1</span>]
-  parameters_of_interest[[<span class="dv">2</span>]] &lt;-<span class="st"> </span><span class="kw">fixef</span>(my_model)[<span class="dv">2</span>]
-  parameters_of_interest[[<span class="dv">3</span>]] &lt;-<span class="st"> </span><span class="kw">VarCorr</span>(my_model)[[<span class="dv">1</span>]][<span class="dv">1</span>, <span class="dv">1</span>]
-  parameters_of_interest[[<span class="dv">4</span>]] &lt;-<span class="st"> </span><span class="kw">VarCorr</span>(my_model)[[<span class="dv">1</span>]][<span class="dv">1</span>, <span class="dv">2</span>]
-  parameters_of_interest[[<span class="dv">5</span>]] &lt;-<span class="st"> </span><span class="kw">VarCorr</span>(my_model)[[<span class="dv">1</span>]][<span class="dv">2</span>, <span class="dv">2</span>]
-  <span class="kw">names</span>(parameters_of_interest) &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="st">&quot;beta_0&quot;</span>, <span class="st">&quot;beta_1&quot;</span>, <span class="st">&quot;sigma0&quot;</span>, <span class="st">&quot;sigma01&quot;</span>, <span class="st">&quot;sigma1&quot;</span>)
+   parameters_of_interest[[<span class="dv">1</span>]] &lt;-<span class="st"> </span><span class="kw">fixef</span>(my_model)
+   parameters_of_interest[[<span class="dv">2</span>]] &lt;-<span class="st"> </span>lme4<span class="op">::</span><span class="kw">VarCorr</span>(my_model)[[<span class="dv">1</span>]][,]
+   ret &lt;-<span class="st"> </span><span class="kw">unlist</span>(parameters_of_interest)<span class="co"># This line is essential if the elements of interest</span>
+   <span class="co">#should be labeled in the following line.</span>
+   <span class="kw">names</span>(ret) &lt;-
+<span class="st">     </span><span class="kw">c</span>(<span class="st">&quot;beta0&quot;</span>, <span class="st">&quot;beta1&quot;</span>, <span class="st">&quot;sigma0&quot;</span>, <span class="st">&quot;sigma01&quot;</span>, <span class="st">&quot;sigma10&quot;</span>, <span class="st">&quot;sigma1&quot;</span>)
 
   <span class="co"># ---- do not change this function below this line.</span>
-  <span class="kw">return</span>(parameters_of_interest)
+  <span class="kw">return</span>(ret)
  }
 
 <span class="kw">hmi_pool</span>(<span class="dt">mids =</span> result_multi, <span class="dt">analysis_function =</span> my_analysis)</code></pre></div>
-<pre><code>##    beta_0    beta_1    sigma0   sigma01    sigma1 
-## 249.67007  10.94977 573.11537  24.48180  31.22304</code></pre>
+<pre><code>##     beta0     beta1    sigma0   sigma01   sigma10    sigma1 
+## 250.36152  10.86148 561.86510  14.71794  14.71794  32.75661</code></pre>
 </div>
 </div>
 <div id="references" class="section level1 unnumbered">

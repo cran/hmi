@@ -3,17 +3,11 @@
 #' The Income data set from the US American National Health and Nutrition Examination Survey (NHANES)
 #' collected by the Centers for Disease Control and Prevention (CDC) and
 #' the National Center for Health Statistics (NCHS) for 2015-2016 - modified.
-#' The NHANES data are included into the package for illustration. The original data are stored in \code{nhanes_org}.
-#' The following modifications were made:
+#' The NHANES data are included into the package for illustration.
+#' The following modifications compared to \code{nhanes_sub} were made:
 #' \describe{
-#' \item{seqn}{The Respondent sequence number is now assigned to the rownames of \code{nhanes}}
-#' \item{indfmmpi}{Family monthly poverty level index was removed due to its overcomplexity with respect to the purpose of illustration}
-#' \item{indfmmpc}{Family monthly poverty level category was removed due to its overcomplexity with respect to the purpose of illustration}
-#' \item{inq300}{Family has savings more than 20,000USD? Was merged with \code{ind310} (Total savings/cash assets for the family?) in a way that if inq300 == 1 then ind310 = "20000;Inf".}
-#' \item{all variables}{"Refused" and "Don't Know" was coded as NA}
 #' \item{ind235}{Monthly family income? Was made an interval object}
 #' \item{ind310}{Total savings/cash assets for the family? Was made an interval object}
-#' \item{inq320}{How do you get to the grocery store? Was made a factor}
 #' }
 #' The Website (\url{https://wwwn.cdc.gov/Nchs/Nhanes/2015-2016/INQ_I.htm}) gives the following Analytic notes:
 #' "The income questions were asked as part of household interview,

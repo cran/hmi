@@ -4,7 +4,7 @@
 \name{nhanes_imp}
 \alias{nhanes_imp}
 \title{National Health and Nutrition Examination Survey (2015 - 2016) - imputed}
-\format{A data frame with 9971 rows and 12 variables:
+\format{A \code{mids} object. Each of the 5 completed data sets has 9971 rows and 12 variables:
 \describe{
 \item{inq020}{Income from wages/salaries? 1 = Yes, 2 = No}
 \item{inq012}{Income from self employment? 1 = Yes, 2 = No}
@@ -27,11 +27,12 @@ Website of the Centers for Disease Control and Prevention:
 nhanes_imp
 }
 \description{
-The Income data set from the US American National Health and Nutrition Examination Survey (NHANES)
+A \code{mids} object with the imputed income data set from the
+US American National Health and Nutrition Examination Survey (NHANES)
 collected by the Centers for Disease Control and Prevention (CDC) and
-the National Center for Health Statistics (NCHS) for 2015-2016 - imputed
-The NHANES data are included into the package for illustration. The original data are stored in
-\code{nhanes_org}. The modified data set \code{nhanes} is imputed by running \code{hmi(nhanes)}.
+the National Center for Health Statistics (NCHS) for 2015-2016.
+The NHANES data are included into the package for illustration.
+The modified data set \code{nhanes_mod} was imputed by running \code{hmi(nhanes_mod, maxit = 50)}.
 The Website (\url{https://wwwn.cdc.gov/Nchs/Nhanes/2015-2016/INQ_I.htm}) gives the following Analytic notes:
 "The income questions were asked as part of household interview,
 the interview sample weights may be used in the analysis for data in this section.

@@ -6,7 +6,7 @@
 \title{Exam results on the GCSE}
 \format{A data frame with 1905 rows and 5 variables:
 \describe{
-\item{school}{The ID of the school the student.}
+\item{school}{The ID of the student's school.}
 \item{student}{The ID of the student within its school.
 They are not unique, different schools may have identical IDs for not identical students.}
 \item{gender}{The gender of the student: 0 for boys and 1 for girls.}
