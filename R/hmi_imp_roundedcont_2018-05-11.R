@@ -229,8 +229,8 @@ imp_roundedcont <- function(y_df,
       #before hand.
       constant_variables <- apply(df_for_g_sub, 2, function(x) length(unique(x)) == 1)
       df_for_g_sub2 <- df_for_g_sub[, !constant_variables, drop = FALSE]
-      if(ncol(df_for_g_sub2) == 1){
-        probitstart <- VGAM::vglm("target ~ 0 + .",
+      if(ncol(df_for_g_sub2) == 1){  # only target variable is left
+        probitstart <- VGAM::vglm("target ~ 1",
                                   data = df_for_g_sub,
                                   family = VGAM::cumulative(parallel = TRUE))
       }else{
@@ -289,18 +289,20 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
   #explaining the tresholds for the example of rounding degrees 1, 10, 100 and 1000:
   #0 (rounding degree 1), 0|1 (reounding degree 10),  1|2 (100),  2|3 (1000)
 
-
+  # other regression parameters in the rounding model
   gammastart <- tmp[-grep("(Intercept)", names(tmp))]
 
 
   gamma1start <- NULL
   gamma1name <- NULL
+
+  # If Y is part of PSI, its coefficient gamma1 has to be treated seperately
   if(is_y_in_PSI){
     gamma1start <- gammastart[names(gammastart) == colnames(y_df)[1]]
     gamma1name <- "gamma1"
   }
 
-    # If Y is part of PSI, its coefficient gamma1 has to be treated seperately
+
   # (For example, gamma1 is part of the covariance matrix in equation 3 in Drechsler, Kiesl, Speidel, 2015)
   gammastart_without_y <- gammastart[names(gammastart) != colnames(y_df)[1]]
   gammastart_without_y_name <- paste("coef_g_on_psi", 1:length(gammastart_without_y), sep = "")
@@ -323,8 +325,11 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
   names(starting_values)[length(kstart) + 1:length(betastart)] <-
     paste("coef_y_on_x", 1:length(betastart), sep = "")
 
-  names(starting_values)[length(kstart) + length(betastart) +
-                          1:length(gammastart)] <- c(gamma1name, gammastart_without_y_name)
+  if(length(c(gamma1name, gammastart_without_y_name)) > 0){
+    names(starting_values)[length(kstart) + length(betastart) +
+                             1:length(gammastart)] <- c(gamma1name, gammastart_without_y_name)
+  }
+
 
   names(starting_values)[length(starting_values)] <- "sigma"
   ###exclude obs below (above) the 0.5% (99.5%) income quantile before maximizing
@@ -338,7 +343,8 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
                          decomposed_y_stand[indicator_precise, "precise"] > quants[2])
 
   PSI_in_negloglik <- PSI_as_MM_sub[, colnames(PSI_as_MM_sub) != colnames(y_df)[1], drop = FALSE]
-
+  oldw <- getOption("warn")
+  options(warn = -1)
   m2 <- stats::nlm(f = negloglik, p = starting_values,
                    parnames = names(starting_values),
                    X_in_negloglik = Y_X_2_all[ , xnames_1, drop = FALSE],
@@ -353,7 +359,7 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
                    indicator_imprecise = indicator_imprecise,
                    indicator_outliers = indicator_outliers,
                    hessian = TRUE, gradtol = 1e-4, steptol = 1e-4)
-
+  options(warn = oldw)
   par_ml2 <- m2$estimate
   names(par_ml2) <- names(starting_values)
   hess <- m2$hessian
@@ -418,6 +424,9 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
   }
 
   gamma1_hat <- pars[grep("^gamma1", colnames(pars))]
+  if(length(gamma1_hat) == 0){
+    gamma1_hat <- 0
+  }
   gamma_hat <- matrix(pars[grep("^coef_g_on_psi", colnames(pars))], ncol = 1)
   sigma_hat <- pars[grep("^sigma", colnames(pars))]
 
@@ -454,7 +463,8 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
                        sd = sigma_hat)
 
   # proposed values for imputation
-  #do the backtransformation from standardised to unstandardised
+  #do the backtransformation from
+  #standardised to unstandardised
   imp_tmp <- decomposed_y[, "precise"]
 
   imp_tmp[indicator_imprecise | indicator_missing] <-
@@ -586,7 +596,9 @@ Consider specifying the variable to be continuous via list_of_types (see ?hmi).\
   }
 
   #restore the original values for those observations with no rounding at all (rounding degree 0).
-  imp_tmp[no_rounding_at_all] <- y_df[no_rounding_at_all, 1]
+  no_rounding_at_all_clean <- no_rounding_at_all
+  no_rounding_at_all_clean[is.na(no_rounding_at_all)] <- FALSE
+  imp_tmp[no_rounding_at_all_clean] <- decomposed_y[no_rounding_at_all_clean, "precise"]
   y_ret <- data.frame(y_ret = imp_tmp)
 
   return(y_ret)

@@ -10,13 +10,22 @@
 #' @param data A \code{data.frame} with all variables appearing in \code{model_formula}.
 #' @param model_formula A \code{\link[stats]{formula}} used for the analysis model.
 #' Currently the package is designed to handle formula used in
-#' \code{lm}, \code{glm} and \code{lmer}.
-#' @param family A family object supported by \code{glm} (resp. \code{glmer}). See \code{family}.
+#' \code{lm}, \code{glm}, \code{lmer} and \code{glmer}. The formula is also used for the default pooling.
+#' @param family To improve the default pooling, a family object supported by \code{glm} (resp. \code{glmer}) an be given.
+#' See \code{family} for details.
 #' @param additional_variables A character with names of variables (separated by "+", like "x8+x9")
 #' that should be included in the imputation model as fixed effects variables,
 #' but not in the analysis model.
 #' An alternative would be to include such variable names into the \code{model_formula}
 #' and run a reduced analysis model with \code{hmi_pool} or the functions provide by \code{mice}.
+#' @param list_of_types a list where each list element has the name of a variable
+#' in the data.frame. The elements have to contain a single character denoting the type of the variable.
+#' See \code{get_type} for details about the variable types.
+#' With the function \code{list_of_types_maker}, the user can get the framework for this object.
+#' In most scenarios this is should not be necessary.
+#' One example where it might be necessary is when only two observations
+#' of a continuous variable are left - because in this case \code{get_type}
+#' interpret is variable to be binary. Wrong is it in no case.
 #' @param M An integer defining the number of imputations that should be made.
 #' @param maxit An integer defining the number of times the imputation cycle
 #' (imputing \eqn{x_1|x_{-1}} then \eqn{x_2|x_{-2}}, ... and finally \eqn{x_p|x_{-p}}) shall be repeated.
@@ -43,14 +52,6 @@
 #' Or a list with model formulas for G, where each list element has the name of a rounded continuous variable.
 #' Such a list can be generated
 #' using \code{list_of_rounding_formulas_maker(data)}
-#' @param list_of_types a list where each list element has the name of a variable
-#' in the data.frame. The elements have to contain a single character denoting the type of the variable.
-#' See \code{get_type} for details about the variable types.
-#' With the function \code{list_of_types_maker}, the user can get the framework for this object.
-#' In most scenarios this is should not be necessary.
-#' One example where it might be necessary is when only two observations
-#' of a continuous variable are left - because in this case \code{get_type}
-#' interpret is variable to be binary. Wrong is it in no case.
 #' @param pool_with_mice A Boolean indicating whether the user wants to pool the \code{M} data sets by mice
 #' using his \code{model_formula}. The default value is \code{FALSE} because this tampers the
 #' \code{mids} object as it adds an argument \code{pooling} not found in "normal" \code{mids} objects
@@ -66,40 +67,17 @@
 #'
 #'  set.seed(123)
 #'  dat_imputed <- hmi(data = Gcsemv, model_formula = model_formula, M = 2, maxit = 2)
-#'
-#'  my_analysis <- function(complete_data){
-#'   # In this list, you can write all the parameters you are interested in.
-#'   # Those will be averaged.
-#'   # So make sure that averaging makes sense and that you only put in single numeric values.
-#'   parameters_of_interest <- list()
-#'
-#'   # ---- write in the following lines, what you are interetest in to do with your complete_data
-#'   # the following lines are an example where the analyst is interested in the fixed intercept
-#'   # and fixed slope and the random intercepts variance,
-#'   # the random slopes variance and their covariance
-#'   my_model <- lmer(model_formula, data = complete_data)
-#'
-#'   parameters_of_interest[[1]] <- fixef(my_model)
-#'   parameters_of_interest[[2]] <- lme4::VarCorr(my_model)[[1]][,]
-#'   ret <- unlist(parameters_of_interest)# This line is essential if the elements of interest
-#'   #should be labeled in the following line.
-#'   names(ret) <-
-#'     c("beta_intercept", "beta_gender", "beta_coursework", "sigma0", "sigma01", "sigma10", "sigma1")
-#'
-#'   return(ret)
-#' }
-#' hmi_pool(mids = dat_imputed, analysis_function = my_analysis)
-#' #if you are interested in fixed effects only, consider pool from mice:
-#' pool(with(data = dat_imputed, expr = lmer(written ~ 1 + gender + coursework + (1 + gender|school))))
+#'  #See ?hmi_pool for how to pool results.
 #' }
 #' @export
 hmi <- function(data,
                 model_formula = NULL,
                 family = stats::gaussian,
                 additional_variables = NULL,
+                list_of_types = NULL,
                 M = 5,
                 maxit = NULL,
-                nitt = 12000,
+                nitt = 22000,
                 burnin = 2000,
                 pvalue = 1,
                 mn = 1,
@@ -108,9 +86,10 @@ hmi <- function(data,
                 heap = NULL,
                 rounding_degrees = NULL,
                 rounding_formula = ~ .,
-                list_of_types = NULL,
                 pool_with_mice = TRUE){
   options(error = expression(NULL))
+
+  if(is.matrix(data)) data <- as.data.frame(data)
 
   if (!is.null(heap)) {
     warning("argument heap is deprecated; please use spike instead.",
@@ -386,8 +365,8 @@ How do you want to proceed: \n
 
   #check whether the formula matches the data
   if(fe$clID_varname != "" & !(fe$clID_varname %in% names(my_data))){
-    writeLines(paste("We didn't find", fe$clID_varname,
-                     "in your data. How do you want to proceed: \n
+    writeLines(paste("We didn't find >>", fe$clID_varname,
+                     "<< in your data. How do you want to proceed: \n
                      [c]ontinue with ignoring the model_formula and running a single level imputation
                      or [e]xiting the imputation?"))
 
@@ -396,6 +375,27 @@ How do you want to proceed: \n
     model_formula <- NULL
     fe[1:length(fe)] <- ""
     fe$fixedeffects_varname <- colnames(my_data)
+  }
+
+  #Check whether there are missing values in the cluster variable.
+  if(fe$clID_varname != ""){
+    missings_in_clid <- is.na(my_data[, fe$clID_varname, drop = FALSE])
+    if(any(missings_in_clid)){
+      writeLines(paste("Missing values were found in the cluster variable >>", fe$clID_varname, "<<.",
+                       "\\nHow do you want to proceed? \n
+  [r]emoving these missing cases from the whole data set (recommended),
+  [i]mputing these missing observations using a categorical imputation routine (not recommended)
+  or [e]xiting the imputation?\n"))
+
+      proceed <- readline("Type 'r', 'i or 'e' into the console and press [enter]: ")
+      if(proceed == "e") return(NULL)
+      if(proceed == "r"){
+        my_data <- my_data[!missings_in_clid, , drop = FALSE]
+        data <-  data[!missings_in_clid, , drop = FALSE]
+
+      }
+      #if the NAs should be imputed, no special action has be be taken here.
+    }
   }
 
   #check whether the constant variable in the dataset are labbeld "1" if this is the label of the
@@ -803,21 +803,44 @@ or [e]xiting the imputation?"))
   if(pool_with_mice & !is.null(model_formula_org)){
     if(fe$clID_varname == ""){ # if no cluster ID was found, run a single level model
 
-      # mice::pool cannot deal with missing coefficients, so pool is only called,
-      #if noch coefficitent is NA.
-      mira <- with(data = midsobj,
-                   expr = stats::glm(formula = formula(format(model_formula_org)), family = family))
+      if(tmp_type == "ordered_categorical"){
+        cat("\n Currently, mice does not support the pooling of ordered categorical models. Use hmi_pool instead.")
+      }else{
 
-      if(!any(unlist(lapply(mira$analyses, function(x) any(is.na(stats::coefficients(x))))))){
-        midsobj$pooling <- mice::pool(mira)
+        # Run a glm or in case of a categorical variable, a multinomial model
+        if(tmp_type == "categorical"){
+          mira <- with(data = midsobj,
+                       expr = nnet::multinom(formula = formula(format(model_formula_org))))
+        }else{
+          mira <- with(data = midsobj,
+                       expr = stats::glm(formula = formula(format(model_formula_org)), family = family))
+        }
+
+        # mice::pool cannot deal with missing coefficients, so pool is only called,
+        #if no coefficitent is NA.
+        if(!any(unlist(lapply(mira$analyses, function(x) any(is.na(stats::coefficients(x))))))){
+          midsobj$pooling <- mice::pool(mira)
+        }
+
       }
 
-
     }else{ # otherwise a multilevel model
-      midsobj$pooling <- mice::pool(with(data = midsobj,
-                                         expr = lme4::glmer(formula = format(model_formula_org),
-                                                            family = family)))
 
+      if(tmp_type == "categorical" | tmp_type == "ordered_categorical"){
+        print("Currently glmer does not support (ordered) categorical variables. Use hmi_pool instead.")
+
+      }else if(tmp_type == "cont"){
+        midsobj$pooling <- mice::pool(with(data = midsobj,
+                                           expr = lme4::lmer(formula = format(model_formula_org))))
+
+      }else{
+        oldw <- getOption("warn")
+        options(warn = -1)
+        midsobj$pooling <- mice::pool(with(data = midsobj,
+                                           expr = lme4::glmer(formula = format(model_formula_org),
+                                                              family = family)))
+        options(warn = oldw)
+      }
     }
   }
 

@@ -11,7 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 
-<meta name="date" content="2018-05-08" />
+<meta name="date" content="2018-05-31" />
 
 <title>hmi: hierarchical multiple imputation</title>
 
@@ -71,7 +71,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <h4 class="author"><em>Matthias Speidel</em></h4>
 <h4 class="author"><em>Jörg Drechsler</em></h4>
 <h4 class="author"><em>Shahab Jolani</em></h4>
-<h4 class="date"><em>2018-05-08</em></h4>
+<h4 class="date"><em>2018-05-31</em></h4>
 
 
 
@@ -84,12 +84,6 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 <h2>Basic functionality</h2>
 <p>The main function that wraps up all sub functions is <code>hmi</code>.</p>
 <p>In the most simple case, the user just passes his <code>data</code> to <code>hmi</code>. In this case all variables with missing values are imputed based on a single level imputation model including the other variables. The situation, for which the package was built for, is that the user additionally passes his analysis model as <code>model_formula</code> to <code>hmi</code> (and defines more details if he wants to). The function then analyzes the <code>model_formula</code>, checks whether it suits to the data given and runs some other checks on the data given (size of the data, number of remaining observations etc.).</p>
-<div id="sequential-regression-imputation" class="section level3">
-<h3>Sequential regression imputation</h3>
-<p>Principally there are two strategies to impute missing data. One is the <em>joint modeling</em> approach. It assumes a joint distribution of the variables and draws values based on this distribution. For this package we see this approach not to be suitable and therefore choose the <em>sequential regression</em> approach. It imputes variables step by step until convergence.</p>
-<p>As a starting point, all variables with missing values are imputed by samples of observed values in this variable. After this is done, <code>hmi</code> starts with the actual, adequate imputation: the first variable with missing values is selected and imputed based on the other variables with an imputation model congenial to the <code>model_formula</code>. Dependent on the situation this can either be a single level or a multilevel model. As different classes of variables require different classes of imputation routines, <code>hmi</code> also determines which type the variable is of (continuous, binary etc. all supported types are listed below).</p>
-<p>Then the next incomplete variable is imputed based on this firstly imputed variable and the other (yet only sample-imputed) variables. Then the third, fourth, … incomplete variable is imputed. The process of imputing all incomplete variables once is called a <em>cycle</em>. Now, a next cycle can begin, imputing the first variable again, but this time based on the other variables which now (once) have been imputed adequately. After <code>maxit</code> cycles, the current state of the variables is stored, building one imputation. Then the process starts again, until <code>M</code> imputed data sets are present.</p>
-</div>
 <div id="output-of-hmi" class="section level3">
 <h3>Output of <code>hmi</code></h3>
 <p>The package is build to be compatible with <code>mice</code>; especially with regard the output. <code>hmi</code> returns, like <code>mice</code>, a so-called <code>mids</code>-object (multiply imputed data set).</p>
@@ -157,7 +151,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 </div>
 <div id="intercept-variable-keyword-intercept" class="section level3">
 <h3>Intercept variable (keyword <code>&quot;intercept&quot;</code>)</h3>
-<p>A constant variable (only one kind of observation) is considered to be a intercept variable. If you run an analysis model with an intercept variable (even if it is only implicit like in <code>y ~ x1 + x2</code>), your data set needs to have such an intercept variable. <code>hmi</code> is quite strict here and different to what you might expect.</p>
+<p>A constant variable (only one kind of observation) is considered to be a intercept variable.</p>
 </div>
 </div>
 <div id="pre-definition-of-the-variable-types" class="section level2">
@@ -183,35 +177,8 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 ## [1] &quot;cont&quot;</code></pre></div>
 <p>Now you can modify <code>example_list_of_types</code> according to your preferences. For example if you want the variable <code>conc</code> to be continuous, you can write <code>example_list_of_types[[&quot;conc&quot;]] &lt;- &quot;cont&quot;</code>. If you finished your modification on <code>example_list_of_types</code>, pass this list to <code>hmi</code> via its parameter <code>list_of_types</code>. In our example it would be <code>hmi(data = CO2, list_of_types = example_list_of_types)</code>. (Note, that <code>CO2</code> doesn’t contain any missing value, so there is no need for imputation.)</p>
 </div>
-<div id="the-theory-behind-mcmcglmm" class="section level2">
-<h2>the theory behind <code>MCMCglmm</code></h2>
-<p>The <code>MCMCglmm</code> package is described in detail in <span class="citation">(Hadfield 2010)</span>.</p>
-<p>He assumes for every observed <em>y</em> that a latent variable <em>l</em> is present. Based on this assumption each model consists of three parts.</p>
-<ol style="list-style-type: decimal">
-<li>a link function.</li>
-<li>a linear mixed model (with fixed and random effects) for <em>l</em>. It has to form <span class="math inline">\(l = X\beta + Z u + \varepsilon\)</span>, with <code>X</code> being the fixed effects variables, <code>Z</code> than random effects variables. <span class="math inline">\(\beta\)</span> and <span class="math inline">\(u\)</span> are the fix and random regression parameters; <span class="math inline">\(\varepsilon\)</span> is the residual.</li>
-<li>a block diagonal covariance matrix including block matrices. Firstly <span class="math inline">\(B\)</span> for the prior covariances of the fixed effects <span class="math inline">\(\beta\)</span>, secondly the random effects covariance matrix <span class="math inline">\(G\)</span> and thirdly the residual variance (matrix) <span class="math inline">\(R\)</span>.</li>
-</ol>
-<p>The link function is defined by the type of variable that shall be imputed. Which variables define <span class="math inline">\(X\)</span> and <span class="math inline">\(Z\)</span> is automatically determined by <code>hmi</code> via the <code>model_formula</code> given by the user.</p>
-<p>The most explanations probably need the covariance matrices. Hadfield predefines the priors to be inverse-wishart distributed. The choice left to the user, is to specifiy the parameters of the inverse-wishart distribution. It is allowed to specify parameters leading to improper priors.</p>
-<p>The product of likelihood and prior distribution gives the posterior distribution for the imputation parameters. <code>MCMCglmm</code> samples imputation parameters from the posterior and <code>hmi</code> draws imputation values based on these imputation parameters. This is done by <em>Markov Chain Monte Carlo</em> (MCMC) methods like <em>Metropolis-Hasting</em>, <em>Gibbs Sampling</em> and <em>Sclice Sampling</em> (see Hadfield’S <a href="https://CRAN.R-project.org/package=MCMCglmm/vignettes/CourseNotes.pdf">MCMCglmm Course Notes</a> for more details).</p>
-<div id="b" class="section level3">
-<h3><span class="math inline">\(B\)</span></h3>
-<p>We specify the inverse-wishart distribution to have an identity scale matrix and degrees of freedom of <code>nu = 0.002</code>. This leads to improper but useful priors.</p>
-</div>
-<div id="g" class="section level3">
-<h3><span class="math inline">\(G\)</span></h3>
-<p>Regarding the random effects <code>MCMCglmm</code> allows different specifications for the structure of the random effects covariance matrix <span class="citation">(Hadfield 2010, tab. 2)</span>. We use <code>us()</code> to allow different correlation between the random effects. The second random effects issue to be specified for a <code>MCMCglmm</code> model is the prior for the covariance matrix. A convincing choice found in the <code>MCMCglmm</code> course notes is to define a <span class="math inline">\(q \times q\)</span> identity matrix with <span class="math inline">\(q\)</span> being the number of random effect variables and to set <code>nu = 0.002</code> which results in an inverse-gamma prior with scale and shape equal to 0.001.</p>
-</div>
-<div id="r" class="section level3">
-<h3><span class="math inline">\(R\)</span></h3>
-<p>For the residuals in most cases, we use non-informative, but improper priors by setting <code>V = 1e-07</code> and <code>nu = -2</code>. In some cases, like logistic models, we have to fix the residual variance at <code>1</code>.</p>
-</div>
-</div>
 <div id="how-to-use-it" class="section level2">
 <h2>how to use it</h2>
-<div id="single-level-example" class="section level3">
-<h3>single level example</h3>
 <p>To illustrate the use of <code>hmi</code>, we stick to the <code>CO2</code> data set; but as it has no missing values, we add those artificially:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(<span class="st">&quot;lme4&quot;</span>)</code></pre></div>
 <pre><code>## Loading required package: Matrix</code></pre>
@@ -226,27 +193,7 @@ ex[<span class="kw">sample</span>(<span class="dv">1</span><span class="op">:</s
 ## 4 321.4398    3     308
 ## 5       NA    4     308
 ## 6 414.6901    5     308</code></pre>
-<p>The most simple call of <code>hmi</code> would be be:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(<span class="st">&quot;hmi&quot;</span>)
-result &lt;-<span class="st"> </span><span class="kw">hmi</span>(ex)</code></pre></div>
-<p><code>result</code> is a <code>mids</code> (<em>multiple imputed data set</em>) object as it also is returned by <code>mice</code>. So the functionality of mice can be used. For example the arithmetic mean and standard deviation of the imputation values across the <code>M</code> imputations can be plotted. Here we have 10 different lines for each of the 10 imputations (in <code>hmi</code> the default value is <code>M = 10</code>). And each line consists of 5 points for each of the 5 iterations (in <code>hmi</code> the default value is <code>maxit = 5</code>).</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(<span class="st">&quot;hmi&quot;</span>)
-<span class="kw">set.seed</span>(<span class="dv">1</span>)
-result &lt;-<span class="st"> </span><span class="kw">hmi</span>(ex)</code></pre></div>
-<p>A useful tool from <code>mice</code> is the <code>complete</code> function. It gives you a data set with the original and imputed values. Here we show the first rows of the completed data set:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">head</span>(<span class="kw">complete</span>(result, <span class="dv">1</span>))</code></pre></div>
-<pre><code>##   Reaction Days Subject
-## 1 249.5600    0     308
-## 2 258.7047    1     308
-## 3 250.8006    2     308
-## 4 321.4398    3     308
-## 5 313.1352    4     308
-## 6 414.6901    5     308</code></pre>
-</div>
-<div id="multilevel-example" class="section level3">
-<h3>multilevel example</h3>
-<p>Let’s move to a more elaborated imputation than just calling <code>hmi(example)</code>. A big part of the packages contribution is the multilevel imputation. For example, if your interest lies in modeling the effect of the carbon dioxide uptake rates (target variable <code>uptake</code>) by the ambient carbon dioxide concentration (explanatory variable <code>conc</code>) - and an intercept. Assuming that the effects of <code>conc</code> and the intercept on <code>uptake</code> can differ across the different plants (random effect variable <code>Plant</code>), your analysis model using <code>lmer</code> from the <code>lme4</code> package would be <code>lmer(uptake ~ 1 + conc + (1 + conc | Plant), data = example)</code>. Just for clarification how this model is read by <code>hmi</code>: the word left to <code>~</code> denotes the target variable, the parts right to <code>~</code> denote the fixed and random effects variables and the cluster ID. And in more detail, the parts within the parentheses left to <code>|</code> denote the random effects variables and the word right to <code>|</code> denotes the cluster ID.</p>
-<p>If you run this model, you will get results but also a warning about convergence:</p>
+<p>A big part of the packages contribution is the multilevel imputation. For example, if your interest lies in modeling the effect of the carbon dioxide uptake rates (target variable <code>uptake</code>) by the ambient carbon dioxide concentration (explanatory variable <code>conc</code>) - and an intercept. Assuming that the effects of <code>conc</code> and the intercept on <code>uptake</code> can differ across the different plants (random effect variable <code>Plant</code>), your analysis model using <code>lmer</code> from the <code>lme4</code> package would be <code>lmer(uptake ~ 1 + conc + (1 + conc | Plant), data = example)</code>. Just for clarification how this model is read by <code>hmi</code>: the word left to <code>~</code> denotes the target variable, the parts right to <code>~</code> denote the fixed and random effects variables and the cluster ID. And in more detail, the parts within the parentheses left to <code>|</code> denote the random effects variables and the word right to <code>|</code> denotes the cluster ID:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(<span class="st">&quot;lme4&quot;</span>)
 <span class="kw">lmer</span>(<span class="dt">formula =</span> Reaction<span class="op">~</span><span class="dv">1</span><span class="op">+</span>Days<span class="op">+</span>(<span class="dv">1</span><span class="op">+</span>Days<span class="op">|</span>Subject), <span class="dt">data =</span> ex, <span class="dt">na.action =</span> na.omit)</code></pre></div>
 <pre><code>## Linear mixed model fit by REML ['lmerMod']
@@ -262,80 +209,20 @@ result &lt;-<span class="st"> </span><span class="kw">hmi</span>(ex)</code></pre
 ## Fixed Effects:
 ## (Intercept)         Days  
 ##      250.54        10.75</code></pre>
-<p>If we would run again <code>hmi(example_2)</code> without further specification, we would end up in running a single level imputation. To make <code>hmi</code> run a multilevel imputation model, you have to specify a multilevel analysis model and this has two mandatory elements: 1. variables with a clusterspecific effect (<em>random effects variables</em>) and 2. a variable indicating the clusters. By passing your analysis model formula to <code>hmi</code> you implicitly specify your imputation model(s). If there are more variables with missing values, then the other variables are tried to be imputed with a similar model. This means that maybe only one covariate in the analysis model becomes the target variable in the imputation model, but the random effects variables and the cluster ID keep the same (except in the case a random effects variable is to be imputed. In this case this variable is dropped from the random effects part of the imputation model). So here a multilevel imputation would be set up by (as we have only one variable to impute, we can set maxit to 1):</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">set.seed</span>(<span class="dv">1</span>)
-result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span class="dt">data =</span> ex, <span class="dt">model_formula =</span> Reaction <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">|</span><span class="st"> </span>Subject), <span class="dt">maxit =</span> <span class="dv">1</span>)</code></pre></div>
-<p>Here we get the message that “Intercept” was not found in the data and we can decide whether we want to stop the imputation routine or continue with a single level imputation. The reason for this message is the strict control in <code>hmi</code> whether your model and your data fit together. So if you are sure that you want to have a intercept variable in your model, include one into your data.</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">set.seed</span>(<span class="dv">1</span>)
-result_multi &lt;-<span class="st"> </span><span class="kw">hmi</span>(<span class="dt">data =</span> ex, <span class="dt">model_formula =</span> Reaction <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">|</span><span class="st"> </span>Subject), <span class="dt">maxit =</span> <span class="dv">1</span>)</code></pre></div>
+<p>If we would run <code>hmi(ex)</code> without further specification, we would end up in running a single level imputation. To make <code>hmi</code> run a multilevel imputation model, you have to specify a multilevel analysis model and this has two mandatory elements: 1. variables with a clusterspecific effect (<em>random effects variables</em>) and 2. a variable indicating the clusters. By passing your analysis model formula to <code>hmi</code> you implicitly specify your imputation model(s). If there are more variables with missing values, then the other variables are tried to be imputed with a similar model. This means that maybe only one covariate in the analysis model becomes the target variable in the imputation model, but the random effects variables and the cluster ID keep the same (except in the case a random effects variable is to be imputed. In this case this variable is dropped from the random effects part of the imputation model). So here a multilevel imputation would be set up by (as we have only one variable to impute, we can set maxit to 1):</p>
 <pre><code>## Warning: 'cBind' is deprecated.
 ##  Since R version 3.2.0, base's cbind() should work fine with S4 objects</code></pre>
-<pre><code>## Warning in lme4::glmer(formula = format(model_formula_org), family =
-## family): calling glmer() with family=gaussian (identity link) as a shortcut
-## to lmer() is deprecated; please call lmer() directly
-
-## Warning in lme4::glmer(formula = format(model_formula_org), family =
-## family): calling glmer() with family=gaussian (identity link) as a shortcut
-## to lmer() is deprecated; please call lmer() directly
-
-## Warning in lme4::glmer(formula = format(model_formula_org), family =
-## family): calling glmer() with family=gaussian (identity link) as a shortcut
-## to lmer() is deprecated; please call lmer() directly
-
-## Warning in lme4::glmer(formula = format(model_formula_org), family =
-## family): calling glmer() with family=gaussian (identity link) as a shortcut
-## to lmer() is deprecated; please call lmer() directly
-
-## Warning in lme4::glmer(formula = format(model_formula_org), family =
-## family): calling glmer() with family=gaussian (identity link) as a shortcut
-## to lmer() is deprecated; please call lmer() directly</code></pre>
 <p>Now the imputation is complete and with the resulting <code>mids</code>-object you could do all the things described in the section above.</p>
 <p>Here we were especially interested in multilevel models, so we want to run our analysis model on the imputed data. By this it is meant that the model is run on every of the <code>M</code> completed data set and then the results are combined according to Rubin’s combining rules <span class="citation">(Rubin 1987)</span>.</p>
 <p><code>mice</code> has the functions <code>fit</code> and <code>pool</code> to do this. But only certain parameters of your model are pooled.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">result_multi<span class="op">$</span>pooling</code></pre></div>
-<pre><code>## Call: mice::pool(object = with(data = midsobj, expr = lme4::glmer(formula = format(model_formula_org), 
-##     family = family)))
-## 
-## Pooled coefficients:
-## (Intercept)        Days 
-##   250.36152    10.86148 
-## 
-## Fraction of information about the coefficients missing due to nonresponse: 
-## (Intercept)        Days 
-##   0.1738207   0.1878328</code></pre>
-<p><code>hmi_pools</code> tries to give a flexible alternative to this function. The function needs two things</p>
-<ol style="list-style-type: decimal">
-<li>your multiple imputed data sets (the <code>mids</code> object you created with <code>hmi</code>)</li>
-<li>function that you have to define in advance. This has to be a function where you write what you want to do with a completed data set (in most cases this would be <em>run a specific model</em>, but it could be <em>take the mean of the third column</em>) and save all parameters you are interested in, in a list returned by the function.</li>
-</ol>
-<p>In the following example runs a mixed model and extracts the fixed effects and the random effects covariance matrix:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"> my_analysis &lt;-<span class="st"> </span><span class="cf">function</span>(complete_data){
-  <span class="co"># In this list, you can write all the parameters you are interested in.</span>
-  <span class="co"># Those will be averaged.</span>
-  <span class="co"># So make sure that averaging makes sense and that you only put in single numeric values.</span>
-  parameters_of_interest &lt;-<span class="st"> </span><span class="kw">list</span>()
-
-  <span class="co"># ---- write in the following lines, what you are interested in to do with your complete_data</span>
-  <span class="co"># the following lines are an example where the analyst is interested in the fixed intercept</span>
-  <span class="co"># and fixed slope and the random intercepts variance,</span>
-  <span class="co"># the random slopes variance and their covariance</span>
-  my_model &lt;-<span class="st"> </span><span class="kw">lmer</span>(Reaction <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">+</span><span class="st"> </span>Days <span class="op">|</span><span class="st"> </span>Subject), <span class="dt">data =</span> complete_data)
-
-   parameters_of_interest[[<span class="dv">1</span>]] &lt;-<span class="st"> </span><span class="kw">fixef</span>(my_model)
-   parameters_of_interest[[<span class="dv">2</span>]] &lt;-<span class="st"> </span>lme4<span class="op">::</span><span class="kw">VarCorr</span>(my_model)[[<span class="dv">1</span>]][,]
-   ret &lt;-<span class="st"> </span><span class="kw">unlist</span>(parameters_of_interest)<span class="co"># This line is essential if the elements of interest</span>
-   <span class="co">#should be labeled in the following line.</span>
-   <span class="kw">names</span>(ret) &lt;-
-<span class="st">     </span><span class="kw">c</span>(<span class="st">&quot;beta0&quot;</span>, <span class="st">&quot;beta1&quot;</span>, <span class="st">&quot;sigma0&quot;</span>, <span class="st">&quot;sigma01&quot;</span>, <span class="st">&quot;sigma10&quot;</span>, <span class="st">&quot;sigma1&quot;</span>)
-
-  <span class="co"># ---- do not change this function below this line.</span>
-  <span class="kw">return</span>(ret)
- }
-
-<span class="kw">hmi_pool</span>(<span class="dt">mids =</span> result_multi, <span class="dt">analysis_function =</span> my_analysis)</code></pre></div>
-<pre><code>##     beta0     beta1    sigma0   sigma01   sigma10    sigma1 
-## 250.36152  10.86148 561.86510  14.71794  14.71794  32.75661</code></pre>
-</div>
+<pre><code>## Class: mipo    m = 5 
+##             estimate      ubar          b         t dfcom       df
+## (Intercept) 250.1456 43.523356 0.08782572 43.628746   174 171.5754
+## Days         10.8599  2.223012 0.06095148  2.296154   174 159.8023
+##                     riv      lambda        fmi
+## (Intercept) 0.002421478 0.002415629 0.01384432
+## Days        0.032902107 0.031854042 0.04374756</code></pre>
 </div>
 <div id="references" class="section level1 unnumbered">
 <h1>References</h1>
