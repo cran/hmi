@@ -1,10 +1,10 @@
 Package: hmi
 Type: Package
 Title: Hierarchical Multiple Imputation
-Version: 0.9.15
+Version: 0.9.16
 Authors@R: c(
     person("Matthias", "Speidel", , "matthias.speidel@googlemail.com", role = c("aut", "cre"),
-    comment = "Institute for Employment Research, Nuremberg, Germany"),
+    comment = "Munich, Germany"),
     person("Joerg", "Drechsler", role = "aut",
     comment = "Institute for Employment Research, Nuremberg, Germany"),
     person("Shahab", "Jolani", role = "aut",
@@ -28,12 +28,11 @@ RoxygenNote: 6.1.1
 VignetteBuilder: knitr
 URL: http://github.com/matthiasspeidel/hmi
 NeedsCompilation: no
-Packaged: 2018-12-13 18:54:45 UTC; Matthias
-Author: Matthias Speidel [aut, cre] (Institute for Employment Research,
-    Nuremberg, Germany),
+Packaged: 2019-06-23 14:23:04 UTC; Matthias
+Author: Matthias Speidel [aut, cre] (Munich, Germany),
   Joerg Drechsler [aut] (Institute for Employment Research, Nuremberg,
     Germany),
   Shahab Jolani [aut] (Maastricht University, Maastricht, The
     Netherlands)
 Repository: CRAN
-Date/Publication: 2018-12-13 19:10:03 UTC
+Date/Publication: 2019-06-23 15:20:03 UTC
