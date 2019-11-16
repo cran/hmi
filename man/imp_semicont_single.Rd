@@ -4,8 +4,7 @@
 \alias{imp_semicont_single}
 \title{The function for hierarchical imputation of semicontinuous variables.}
 \usage{
-imp_semicont_single(y_imp, X_imp, spike = NULL, pvalue = 0.2,
-  k = Inf)
+imp_semicont_single(y_imp, X_imp, spike = NULL, pvalue = 0.2, k = Inf)
 }
 \arguments{
 \item{y_imp}{A Vector with the variable to impute.}

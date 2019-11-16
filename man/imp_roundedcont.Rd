@@ -4,8 +4,14 @@
 \alias{imp_roundedcont}
 \title{The function to impute rounded continuous variables}
 \usage{
-imp_roundedcont(y_df, X_imp, PSI, pvalue = 0.2, k = Inf,
-  rounding_degrees = NULL)
+imp_roundedcont(
+  y_df,
+  X_imp,
+  PSI,
+  pvalue = 0.2,
+  k = Inf,
+  rounding_degrees = NULL
+)
 }
 \arguments{
 \item{y_df}{A data.frame with the variable to impute.}

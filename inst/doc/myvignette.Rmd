@@ -91,7 +91,7 @@ references:
 ## Purpose of package
 The hmi package allows the user to run single level and multilevel imputation models.
 The big additional benefit of this package is the user-friendliness. 
-It is designed for researchers, experienced in running single und multilevel analysis models, but not in writing own multilevel imputation routines.
+It is designed for researchers, experienced in running single and multilevel analysis models, but not in writing own multilevel imputation routines.
 
 The user just has to pass the data to the main function and, optionally, his analysis model.
 Basically the package then translates this analysis model into commands to impute the data according to it with functions from `mice`, `MCMCglmm` or routines build for this package.

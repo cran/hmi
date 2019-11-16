@@ -4,8 +4,18 @@
 \alias{imp_semicont_multi}
 \title{The function for hierarchical imputation of semicontinuous variables.}
 \usage{
-imp_semicont_multi(y_imp, X_imp, Z_imp, clID, spike = NULL,
-  nitt = 22000, burnin = 2000, thin = 20, pvalue = 0.2, k = Inf)
+imp_semicont_multi(
+  y_imp,
+  X_imp,
+  Z_imp,
+  clID,
+  spike = NULL,
+  nitt = 22000,
+  burnin = 2000,
+  thin = 20,
+  pvalue = 0.2,
+  k = Inf
+)
 }
 \arguments{
 \item{y_imp}{A Vector with the variable to impute.}

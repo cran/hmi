@@ -7,11 +7,12 @@
 <meta charset="utf-8" />
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 
-<meta name="date" content="2019-06-23" />
+<meta name="date" content="2019-11-16" />
 
 <title>hmi: hierarchical multiple imputation</title>
 
@@ -95,7 +96,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
       if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") continue;
       var style = rule.style.cssText;
       // check if color or background-color is set
-      if (rule.style.color === '' || rule.style.backgroundColor === '') continue;
+      if (rule.style.color === '' && rule.style.backgroundColor === '') continue;
       // replace div.sourceCode by a pre.sourceCode rule
       sheets[i].deleteRule(j);
       sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
@@ -304,13 +305,13 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <h4 class="author">Matthias Speidel</h4>
 <h4 class="author">Jörg Drechsler</h4>
 <h4 class="author">Shahab Jolani</h4>
-<h4 class="date">2019-06-23</h4>
+<h4 class="date">2019-11-16</h4>
 
 
 
 <div id="purpose-of-package" class="section level2">
 <h2>Purpose of package</h2>
-<p>The hmi package allows the user to run single level and multilevel imputation models. The big additional benefit of this package is the user-friendliness. It is designed for researchers, experienced in running single und multilevel analysis models, but not in writing own multilevel imputation routines.</p>
+<p>The hmi package allows the user to run single level and multilevel imputation models. The big additional benefit of this package is the user-friendliness. It is designed for researchers, experienced in running single and multilevel analysis models, but not in writing own multilevel imputation routines.</p>
 <p>The user just has to pass the data to the main function and, optionally, his analysis model. Basically the package then translates this analysis model into commands to impute the data according to it with functions from <code>mice</code>, <code>MCMCglmm</code> or routines build for this package.</p>
 </div>
 <div id="basic-functionality" class="section level2">
@@ -443,23 +444,21 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 ## (Intercept)         Days  
 ##      252.03        10.51</code></pre>
 <p>If we would run <code>hmi(ex)</code> without further specification, we would end up in running a single level imputation. To make <code>hmi</code> run a multilevel imputation model, you have to specify a multilevel analysis model and this has two mandatory elements: 1. variables with a cluster specific effect (<em>random effects variables</em>) and 2. a variable indicating the clusters. By passing your analysis model formula to <code>hmi</code> you implicitly specify your imputation model(s). If there are more variables with missing values, then the other variables are tried to be imputed with a similar model. This means that maybe only one covariate in the analysis model becomes the target variable in the imputation model, but the random effects variables and the cluster ID keep the same (except in the case a random effects variable is to be imputed. In this case this variable is dropped from the random effects part of the imputation model). So here a multilevel imputation would be set up by (as we have only one variable to impute, we can set maxit to 1):</p>
-<pre><code>## Warning in checkConv(attr(opt, &quot;derivs&quot;), opt$par, ctrl =
-## control$checkConv, : Model failed to converge with max|grad| = 0.00266568
-## (tol = 0.002, component 1)</code></pre>
-<pre><code>## Warning in checkConv(attr(opt, &quot;derivs&quot;), opt$par, ctrl =
-## control$checkConv, : Model failed to converge with max|grad| = 0.00218762
-## (tol = 0.002, component 1)</code></pre>
+<pre><code>## Warning in checkConv(attr(opt, &quot;derivs&quot;), opt$par, ctrl = control$checkConv, :
+## Model failed to converge with max|grad| = 0.00266568 (tol = 0.002, component 1)</code></pre>
+<pre><code>## Warning in checkConv(attr(opt, &quot;derivs&quot;), opt$par, ctrl = control$checkConv, :
+## Model failed to converge with max|grad| = 0.00218762 (tol = 0.002, component 1)</code></pre>
 <p>Now the imputation is complete and with the resulting <code>mids</code>-object you could do all the things described in the section above.</p>
 <p>Here we were especially interested in multilevel models, so we want to run our analysis model on the imputed data. By this it is meant that the model is run on every of the <code>M</code> completed data set and then the results are combined according to Rubin’s combining rules <span class="citation">(Rubin 1987)</span>.</p>
 <p><code>mice</code> has the functions <code>fit</code> and <code>pool</code> to do this. But only certain parameters of your model are pooled.</p>
 <div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb10-1" title="1">result_multi<span class="op">$</span>pooling</a></code></pre></div>
 <pre><code>## Class: mipo    m = 5 
-##              estimate      ubar         b         t dfcom        df
-## (Intercept) 251.48160 46.848550 5.3554726 53.275117   174  97.57924
-## Days         10.51484  2.542402 0.1694224  2.745709   174 130.74777
-##                    riv    lambda        fmi
-## (Intercept) 0.13717750 0.1206298 0.13811593
-## Days        0.07996644 0.0740453 0.08789158</code></pre>
+##              estimate      ubar         b         t dfcom        df        riv
+## (Intercept) 251.48160 46.848550 5.3554726 53.275117   174  97.57924 0.13717750
+## Days         10.51484  2.542402 0.1694224  2.745709   174 130.74777 0.07996644
+##                lambda        fmi
+## (Intercept) 0.1206298 0.13811593
+## Days        0.0740453 0.08789158</code></pre>
 </div>
 <div id="references" class="section level1 unnumbered">
 <h1>References</h1>
@@ -479,6 +478,9 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 </div>
 </div>
 
+
+
+<!-- code folding -->
 
 
 <!-- dynamically load mathjax for compatibility with self-contained -->

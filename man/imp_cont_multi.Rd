@@ -4,8 +4,17 @@
 \alias{imp_cont_multi}
 \title{The function for hierarchical imputation of continuous variables.}
 \usage{
-imp_cont_multi(y_imp, X_imp, Z_imp, clID, nitt = 22000, burnin = 2000,
-  thin = 20, pvalue = 0.2, k = Inf)
+imp_cont_multi(
+  y_imp,
+  X_imp,
+  Z_imp,
+  clID,
+  nitt = 22000,
+  burnin = 2000,
+  thin = 20,
+  pvalue = 0.2,
+  k = Inf
+)
 }
 \arguments{
 \item{y_imp}{A vector with the variable to impute.}

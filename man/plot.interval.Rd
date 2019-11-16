@@ -4,9 +4,18 @@
 \alias{plot.interval}
 \title{Plotting interval variables}
 \usage{
-\method{plot}{interval}(x = NULL, y = NULL, data = NULL,
-  col = "black", xlab = NULL, ylab = NULL, xlim = NULL,
-  ylim = NULL, sort = NULL, ...)
+\method{plot}{interval}(
+  x = NULL,
+  y = NULL,
+  data = NULL,
+  col = "black",
+  xlab = NULL,
+  ylab = NULL,
+  xlim = NULL,
+  ylim = NULL,
+  sort = NULL,
+  ...
+)
 }
 \arguments{
 \item{x}{In its most save way, \code{x} is an object from class \code{interval}

@@ -4,10 +4,25 @@
 \alias{hmi}
 \title{hmi: Hierarchical Multilevel Imputation.}
 \usage{
-hmi(data, model_formula, family, additional_variables, list_of_types,
-  m = 5, maxit, nitt = 22000, burnin = 2000, pvalue = 1, mn = 1,
-  k, spike, heap, rounding_degrees, rounding_formula = ~.,
-  pool_with_mice = TRUE)
+hmi(
+  data,
+  model_formula,
+  family,
+  additional_variables,
+  list_of_types,
+  m = 5,
+  maxit,
+  nitt = 22000,
+  burnin = 2000,
+  pvalue = 1,
+  mn = 1,
+  k,
+  spike,
+  heap,
+  rounding_degrees,
+  rounding_formula = ~.,
+  pool_with_mice = TRUE
+)
 }
 \arguments{
 \item{data}{A \code{data.frame} with all variables appearing in \code{model_formula}.}

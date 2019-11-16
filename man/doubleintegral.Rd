@@ -4,8 +4,7 @@
 \alias{doubleintegral}
 \title{Function to calculate double integrals}
 \usage{
-doubleintegral(lower_inner, upper_inner, lower_outer, upper_outer, cdf,
-  ...)
+doubleintegral(lower_inner, upper_inner, lower_outer, upper_outer, cdf, ...)
 }
 \arguments{
 \item{lower_inner}{The vector for the lower bound for the inner integral}

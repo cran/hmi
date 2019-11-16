@@ -4,8 +4,12 @@
 \alias{extract_varnames}
 \title{Function to extract the different elements of a formula}
 \usage{
-extract_varnames(model_formula = NULL, constant_variables,
-  variable_names_in_data = colnames(data), data)
+extract_varnames(
+  model_formula = NULL,
+  constant_variables,
+  variable_names_in_data = colnames(data),
+  data
+)
 }
 \arguments{
 \item{model_formula}{A formula (from class \code{formula})}

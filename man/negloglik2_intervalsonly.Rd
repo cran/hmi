@@ -4,8 +4,13 @@
 \alias{negloglik2_intervalsonly}
 \title{calculate the likelihood contribution of interval data only}
 \usage{
-negloglik2_intervalsonly(para, parnames = names(para), X, lower_bounds,
-  upper_bounds)
+negloglik2_intervalsonly(
+  para,
+  parnames = names(para),
+  X,
+  lower_bounds,
+  upper_bounds
+)
 }
 \arguments{
 \item{para}{This is the vector \eqn{Psi} of parameters defining model

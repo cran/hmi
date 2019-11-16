@@ -4,10 +4,21 @@
 \alias{negloglik}
 \title{calculate the likelihood contribution of the data}
 \usage{
-negloglik(para, parnames = names(para), X_in_negloglik, PSI_in_negloglik,
-  y_precise_stand, lower_bounds = NA, upper_bounds = NA, my_g,
-  sd_of_y_precise, indicator_precise, indicator_imprecise,
-  indicator_outliers, rounding_degrees = c(1, 10, 100, 1000))
+negloglik(
+  para,
+  parnames = names(para),
+  X_in_negloglik,
+  PSI_in_negloglik,
+  y_precise_stand,
+  lower_bounds = NA,
+  upper_bounds = NA,
+  my_g,
+  sd_of_y_precise,
+  indicator_precise,
+  indicator_imprecise,
+  indicator_outliers,
+  rounding_degrees = c(1, 10, 100, 1000)
+)
 }
 \arguments{
 \item{para}{This is the vector \eqn{Psi} of parameters

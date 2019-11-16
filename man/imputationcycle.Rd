@@ -4,10 +4,23 @@
 \alias{imputationcycle}
 \title{Cycling}
 \usage{
-imputationcycle(data_before, original_data, NA_locator, fe,
-  interaction_names, list_of_types, nitt, burnin, thin, pvalue = 0.2, mn,
-  k = Inf, spike = NULL, rounding_degrees = NULL,
-  rounding_covariates)
+imputationcycle(
+  data_before,
+  original_data,
+  NA_locator,
+  fe,
+  interaction_names,
+  list_of_types,
+  nitt,
+  burnin,
+  thin,
+  pvalue = 0.2,
+  mn,
+  k = Inf,
+  spike = NULL,
+  rounding_degrees = NULL,
+  rounding_covariates
+)
 }
 \arguments{
 \item{data_before}{The n x p data.frame with the variables to impute. It was prepared for imputation in the \code{wrapper} function.

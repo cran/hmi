@@ -4,8 +4,7 @@
 \alias{get_type}
 \title{Get the type of variables.}
 \usage{
-get_type(variable, spike = NULL, rounding_degrees = c(1, 10, 100,
-  1000))
+get_type(variable, spike = NULL, rounding_degrees = c(1, 10, 100, 1000))
 }
 \arguments{
 \item{variable}{A variable (vector) from your data set.}

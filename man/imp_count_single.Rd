@@ -4,8 +4,15 @@
 \alias{imp_count_single}
 \title{The function for imputation of binary variables.}
 \usage{
-imp_count_single(y_imp, X_imp, nitt = 22000, burnin = 2000,
-  thin = 20, pvalue = 0.2, k = Inf)
+imp_count_single(
+  y_imp,
+  X_imp,
+  nitt = 22000,
+  burnin = 2000,
+  thin = 20,
+  pvalue = 0.2,
+  k = Inf
+)
 }
 \arguments{
 \item{y_imp}{A vector with the variable to impute.}

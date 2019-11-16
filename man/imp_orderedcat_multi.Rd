@@ -4,8 +4,17 @@
 \alias{imp_orderedcat_multi}
 \title{The function for hierarchical imputation of categorical variables.}
 \usage{
-imp_orderedcat_multi(y_imp, X_imp, Z_imp, clID, nitt = 25000,
-  burnin = 5000, thin = 20, pvalue = 0.2, k = Inf)
+imp_orderedcat_multi(
+  y_imp,
+  X_imp,
+  Z_imp,
+  clID,
+  nitt = 25000,
+  burnin = 5000,
+  thin = 20,
+  pvalue = 0.2,
+  k = Inf
+)
 }
 \arguments{
 \item{y_imp}{A Vector with the variable to impute.}
