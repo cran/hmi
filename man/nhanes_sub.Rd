@@ -4,7 +4,8 @@
 \name{nhanes_sub}
 \alias{nhanes_sub}
 \title{A subset of the National Health and Nutrition Examination Survey (2015 - 2016)}
-\format{A data frame with 9971 rows and 12 variables:
+\format{
+A data frame with 9971 rows and 12 variables:
 \describe{
 \item{inq020}{Income from wages/salaries? 1 = Yes, 2 = No}
 \item{inq012}{Income from self employment? 1 = Yes, 2 = No}
@@ -18,7 +19,8 @@
 \item{ind235}{Monthly family income? 1 = 0 - 399 USD, 2 = 400 - 799 USD, 3 = 800 - 1,249 USD, 4 = 1,250 - 1,649 USD, 5 = 1,650 - 2,099 USD, 6 = 2,100 - 2,899 USD, 7 = 2,900 - 3,749USD, 8 = 3,750 - 4,599USD, 9 = 4,600 - 5,399 USD, 10 = 5,400 - 6,249 USD, 11 = 6,250 - 8,399 USD, 12 = 8,400 USD and over, 13 = 0 USD and over}
 \item{ind310}{Total savings/cash assets for the family? 1 = 0 - 3,000 USD, 2 = 3,001 - 5,000 USD, 3 = 5,001 - 10,000, 4 = 10,001 - 15,000 USD, 5 = 15,001 - 20,000, 6 = 0 - 20,000 USD, 7 = 20,001 USD and over, 8 = 0 USD and over}
 \item{inq320}{How do you get to the grocery store?, 1 = In my car, 2 = In a car that belongs to someone I live with, 3 = In a car that belongs to someone who lives elsewhere, 4 = Walk, 5 = Ride bicycle, 6 = Bus, subway or other public transit, 7 = Taxi or other paid driver, 8 = Someone else delivers groceries, 9 = Other, 66 = No usual mode of traveling to store, 77 = Refused, 99 = Don't know}
-}}
+}
+}
 \source{
 Website of the Centers for Disease Control and Prevention:
 \url{https://wwwn.cdc.gov/Nchs/Nhanes/2015-2016/INQ_I.XPT}

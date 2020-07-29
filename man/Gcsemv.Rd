@@ -4,7 +4,8 @@
 \name{Gcsemv}
 \alias{Gcsemv}
 \title{Exam results on the GCSE}
-\format{A data frame with 1905 rows and 5 variables:
+\format{
+A data frame with 1905 rows and 5 variables:
 \describe{
 \item{school}{The ID of the student's school.}
 \item{student}{The ID of the student within its school.
@@ -12,7 +13,8 @@ They are not unique, different schools may have identical IDs for not identical 
 \item{gender}{The gender of the student: 0 for boys and 1 for girls.}
 \item{written}{The score in a written questionnaire.}
 \item{coursework}{The score in a coursework.}
-}}
+}
+}
 \source{
 Website of the Centre for Multilevel Modelling at the University of Bristol:
 \url{http://www.bristol.ac.uk/cmm/media/team/hg/msm-3rd-ed/gcsemv.xls}
