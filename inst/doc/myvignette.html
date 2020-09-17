@@ -11,7 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 
-<meta name="date" content="2020-07-29" />
+<meta name="date" content="2020-09-17" />
 
 <title>hmi: hierarchical multiple imputation</title>
 
@@ -19,9 +19,9 @@
 
 <style type="text/css">code{white-space: pre;}</style>
 <style type="text/css" data-origin="pandoc">
-a.sourceLine { display: inline-block; line-height: 1.25; }
-a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
-a.sourceLine:empty { height: 1.2em; }
+code.sourceCode > span { display: inline-block; line-height: 1.25; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+code.sourceCode > span:empty { height: 1.2em; }
 .sourceCode { overflow: visible; }
 code.sourceCode { white-space: pre; position: relative; }
 div.sourceCode { margin: 1em 0; }
@@ -31,14 +31,16 @@ div.sourceCode { overflow: auto; }
 }
 @media print {
 code.sourceCode { white-space: pre-wrap; }
-a.sourceLine { text-indent: -1em; padding-left: 1em; }
+code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
 }
-pre.numberSource a.sourceLine
-  { position: relative; left: -4em; }
-pre.numberSource a.sourceLine::before
-  { content: attr(title);
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
     position: relative; left: -1em; text-align: right; vertical-align: baseline;
-    border: none; pointer-events: all; display: inline-block;
+    border: none; display: inline-block;
     -webkit-touch-callout: none; -webkit-user-select: none;
     -khtml-user-select: none; -moz-user-select: none;
     -ms-user-select: none; user-select: none;
@@ -47,9 +49,9 @@ pre.numberSource a.sourceLine::before
   }
 pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
 div.sourceCode
-  {  }
+  {   }
 @media screen {
-a.sourceLine::before { text-decoration: underline; }
+code.sourceCode > span > a:first-child::before { text-decoration: underline; }
 }
 code span.al { color: #ff0000; font-weight: bold; } /* Alert */
 code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
@@ -302,7 +304,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <h4 class="author">Matthias Speidel</h4>
 <h4 class="author">Jörg Drechsler</h4>
 <h4 class="author">Shahab Jolani</h4>
-<h4 class="date">2020-07-29</h4>
+<h4 class="date">2020-09-17</h4>
 
 
 
@@ -392,31 +394,31 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <p>The example uses the data set <code>CO2</code> about the “Carbon Dioxide Uptake in Grass Plants”, which comes along with <code>R</code>. If you run the common <code>str(CO2)</code>, you get the information that the variable <code>Plant</code> is an <code>Ord.factor w/ 12 levels</code>, <code>Type</code> is a <code>Factor w/ 2 levels</code>, <code>Treatment</code> is a <code>Factor w/ 2 levels</code>, <code>conc</code> is a <code>num</code> and so is <code>uptake</code>.</p>
 <p><code>hmi</code> draws similar conclusions. A difference would be that we call Factors with 2 levels “binary”. Also the variable <code>conc</code> would be considered to be a special case of a continuous variable - a rounded continuous because every value of the ambient carbon dioxide concentration is divisible by at least 5.</p>
 <p>You can see in advance how variables will be treated internally by <code>hmi</code> if you call the <code>list_of_types_maker</code>. For example <code>example_list_of_types &lt;- list_of_types_maker(CO2)</code> gives you the following list:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb1-1" title="1"><span class="co">## $Plant</span></a>
-<a class="sourceLine" id="cb1-2" title="2"><span class="co">## [1] &quot;ordered_categorical&quot;</span></a>
-<a class="sourceLine" id="cb1-3" title="3"><span class="co">## </span></a>
-<a class="sourceLine" id="cb1-4" title="4"><span class="co">## $Type</span></a>
-<a class="sourceLine" id="cb1-5" title="5"><span class="co">## [1] &quot;binary&quot;</span></a>
-<a class="sourceLine" id="cb1-6" title="6"><span class="co">## </span></a>
-<a class="sourceLine" id="cb1-7" title="7"><span class="co">## $Treatment</span></a>
-<a class="sourceLine" id="cb1-8" title="8"><span class="co">## [1] &quot;binary&quot;</span></a>
-<a class="sourceLine" id="cb1-9" title="9"><span class="co">## </span></a>
-<a class="sourceLine" id="cb1-10" title="10"><span class="co">## $conc</span></a>
-<a class="sourceLine" id="cb1-11" title="11"><span class="co">## [1] &quot;roundedcont&quot;</span></a>
-<a class="sourceLine" id="cb1-12" title="12"><span class="co">## </span></a>
-<a class="sourceLine" id="cb1-13" title="13"><span class="co">## $uptake</span></a>
-<a class="sourceLine" id="cb1-14" title="14"><span class="co">## [1] &quot;cont&quot;</span></a></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1"></a><span class="co">## $Plant</span></span>
+<span id="cb1-2"><a href="#cb1-2"></a><span class="co">## [1] &quot;ordered_categorical&quot;</span></span>
+<span id="cb1-3"><a href="#cb1-3"></a><span class="co">## </span></span>
+<span id="cb1-4"><a href="#cb1-4"></a><span class="co">## $Type</span></span>
+<span id="cb1-5"><a href="#cb1-5"></a><span class="co">## [1] &quot;binary&quot;</span></span>
+<span id="cb1-6"><a href="#cb1-6"></a><span class="co">## </span></span>
+<span id="cb1-7"><a href="#cb1-7"></a><span class="co">## $Treatment</span></span>
+<span id="cb1-8"><a href="#cb1-8"></a><span class="co">## [1] &quot;binary&quot;</span></span>
+<span id="cb1-9"><a href="#cb1-9"></a><span class="co">## </span></span>
+<span id="cb1-10"><a href="#cb1-10"></a><span class="co">## $conc</span></span>
+<span id="cb1-11"><a href="#cb1-11"></a><span class="co">## [1] &quot;roundedcont&quot;</span></span>
+<span id="cb1-12"><a href="#cb1-12"></a><span class="co">## </span></span>
+<span id="cb1-13"><a href="#cb1-13"></a><span class="co">## $uptake</span></span>
+<span id="cb1-14"><a href="#cb1-14"></a><span class="co">## [1] &quot;cont&quot;</span></span></code></pre></div>
 <p>Now you can modify <code>example_list_of_types</code> according to your preferences. For example if you want the variable <code>conc</code> to be continuous, you can write <code>example_list_of_types[[&quot;conc&quot;]] &lt;- &quot;cont&quot;</code>. If you finished your modification on <code>example_list_of_types</code>, pass this list to <code>hmi</code> via its parameter <code>list_of_types</code>. In our example it would be <code>hmi(data = CO2, list_of_types = example_list_of_types)</code>. (Note, that <code>CO2</code> doesn’t contain any missing value, so there is no need for imputation.)</p>
 </div>
 <div id="how-to-use-it" class="section level2">
 <h2>how to use it</h2>
 <p>To illustrate the use of <code>hmi</code>, we stick to the <code>CO2</code> data set; but as it has no missing values, we add those artificially:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" title="1"><span class="kw">library</span>(<span class="st">&quot;lme4&quot;</span>)</a></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1"></a><span class="kw">library</span>(<span class="st">&quot;lme4&quot;</span>)</span></code></pre></div>
 <pre><code>## Loading required package: Matrix</code></pre>
-<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb4-1" title="1">ex &lt;-<span class="st"> </span>sleepstudy</a>
-<a class="sourceLine" id="cb4-2" title="2"><span class="kw">set.seed</span>(<span class="dv">1</span>)</a>
-<a class="sourceLine" id="cb4-3" title="3">ex[<span class="kw">sample</span>(<span class="dv">1</span><span class="op">:</span><span class="kw">nrow</span>(CO2), <span class="dt">size =</span> <span class="dv">20</span>), <span class="st">&quot;Reaction&quot;</span>] &lt;-<span class="st"> </span><span class="ot">NA</span></a>
-<a class="sourceLine" id="cb4-4" title="4"><span class="kw">head</span>(ex) <span class="co"># e.g. in line 5 there is a NA now.</span></a></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1"></a>ex &lt;-<span class="st"> </span>sleepstudy</span>
+<span id="cb4-2"><a href="#cb4-2"></a><span class="kw">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb4-3"><a href="#cb4-3"></a>ex[<span class="kw">sample</span>(<span class="dv">1</span><span class="op">:</span><span class="kw">nrow</span>(CO2), <span class="dt">size =</span> <span class="dv">20</span>), <span class="st">&quot;Reaction&quot;</span>] &lt;-<span class="st"> </span><span class="ot">NA</span></span>
+<span id="cb4-4"><a href="#cb4-4"></a><span class="kw">head</span>(ex) <span class="co"># e.g. in line 5 there is a NA now.</span></span></code></pre></div>
 <pre><code>##   Reaction Days Subject
 ## 1       NA    0     308
 ## 2 258.7047    1     308
@@ -425,8 +427,8 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ## 5 356.8519    4     308
 ## 6 414.6901    5     308</code></pre>
 <p>A big part of the packages contribution is the multilevel imputation. For example, if your interest lies in modeling the effect of the carbon dioxide uptake rates (target variable <code>uptake</code>) by the ambient carbon dioxide concentration (explanatory variable <code>conc</code>) - and an intercept. Assuming that the effects of <code>conc</code> and the intercept on <code>uptake</code> can differ across the different plants (random effect variable <code>Plant</code>), your analysis model using <code>lmer</code> from the <code>lme4</code> package would be <code>lmer(uptake ~ 1 + conc + (1 + conc | Plant), data = example)</code>. Just for clarification how this model is read by <code>hmi</code>: the word left to <code>~</code> denotes the target variable, the parts right to <code>~</code> denote the fixed and random effects variables and the cluster ID. And in more detail, the parts within the parentheses left to <code>|</code> denote the random effects variables and the word right to <code>|</code> denotes the cluster ID:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb6-1" title="1"><span class="kw">library</span>(<span class="st">&quot;lme4&quot;</span>)</a>
-<a class="sourceLine" id="cb6-2" title="2"><span class="kw">lmer</span>(<span class="dt">formula =</span> Reaction<span class="op">~</span><span class="dv">1</span><span class="op">+</span>Days<span class="op">+</span>(<span class="dv">1</span><span class="op">+</span>Days<span class="op">|</span>Subject), <span class="dt">data =</span> ex, <span class="dt">na.action =</span> na.omit)</a></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1"></a><span class="kw">library</span>(<span class="st">&quot;lme4&quot;</span>)</span>
+<span id="cb6-2"><a href="#cb6-2"></a><span class="kw">lmer</span>(<span class="dt">formula =</span> Reaction<span class="op">~</span><span class="dv">1</span><span class="op">+</span>Days<span class="op">+</span>(<span class="dv">1</span><span class="op">+</span>Days<span class="op">|</span>Subject), <span class="dt">data =</span> ex, <span class="dt">na.action =</span> na.omit)</span></code></pre></div>
 <pre><code>## Linear mixed model fit by REML [&#39;lmerMod&#39;]
 ## Formula: Reaction ~ 1 + Days + (1 + Days | Subject)
 ##    Data: ex
@@ -446,7 +448,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <p>Now the imputation is complete and with the resulting <code>mids</code>-object you could do all the things described in the section above.</p>
 <p>Here we were especially interested in multilevel models, so we want to run our analysis model on the imputed data. By this it is meant that the model is run on every of the <code>M</code> completed data set and then the results are combined according to Rubin’s combining rules <span class="citation">(Rubin 1987)</span>.</p>
 <p><code>mice</code> has the functions <code>fit</code> and <code>pool</code> to do this. But only certain parameters of your model are pooled.</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb9-1" title="1">result_multi<span class="op">$</span>pooling</a></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1"></a>result_multi<span class="op">$</span>pooling</span></code></pre></div>
 <pre><code>## Class: mipo    m = 5 
 ##          term m  estimate      ubar         b         t dfcom        df
 ## 1 (Intercept) 5 251.48160 46.849318 5.3554726 53.275885   174  97.58036
