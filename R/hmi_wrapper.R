@@ -67,6 +67,9 @@
 #'  dat_imputed <- hmi(data = Gcsemv, model_formula = model_formula, m = 2, maxit = 2)
 #'  #See ?hmi_pool for how to pool results.
 #' }
+#' @references Matthias Speidel, Joerg Drechsler and Shahab Jolani (2020):
+#' "The R Package hmi: A Convenient Tool for Hierarchical Multiple Imputation and Beyond",
+#' Journal of Statistical Software, Vol. 95, No. 9, p. 1--48, \url{http://dx.doi.org/10.18637/jss.v095.i09}
 #' @export
 hmi <- function(data,
                 model_formula,

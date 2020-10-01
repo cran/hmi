@@ -1,0 +1,19 @@
+bibentry(bibtype = "Article",
+  title        = "The {R} Package {hmi}: A Convenient Tool for Hierarchical Multiple Imputation and Beyond",
+  author       = c(person(given = "Matthias",
+                          family = "Speidel",
+                          email = "matthias.speidel@gmail.com"),
+                   person(given = "J\\\"org",
+                          family = "Drechsler"),
+                   person(given = "Shahab",
+                          family = "Jolani")),
+  journal      = "Journal of Statistical Software",
+  year         = "2020",
+  volume       = "95",
+  number       = "9",
+  pages        = "1--48",
+  doi          = "10.18637/jss.v095.i09",
+
+  header       = "To cite hmi in publications use:"
+)
+

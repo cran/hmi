@@ -1,4 +1,4 @@
-fe7ef2c324d360ec7c5723ceb72a74ce *DESCRIPTION
+bde3d8ad4778b901612acdda300d9528 *DESCRIPTION
 a551f8a59b963b706db8b58a1e7270d5 *NAMESPACE
 19062308721229d1e3c8830263229812 *R/Gcsemv.R
 d15ab8bdac35c9d9d8328203e89717d3 *R/hmi_cycle.R
@@ -17,7 +17,7 @@ c92095b75a1a283daae450357a7c0a7a *R/hmi_imp_interval.R
 9ae7706fe2b5953df635b15e36672d10 *R/hmi_imp_semicont_multi.R
 9cfee5deaee23c21a1c9d2615dd2b56e *R/hmi_imp_semicont_single.R
 b5a2cc9ba9ff62528e1540765db880fe *R/hmi_smallfunctions.R
-24a369fa3e122fc9128a9f29d45e4f02 *R/hmi_wrapper.R
+9dba8fdf016c0fb06da9bb0698616266 *R/hmi_wrapper.R
 8f772fab06eee65b9acdc420d8f6b796 *R/nhanes_imp.R
 e1ced6aab6ac0894a9c7ecd2b974b908 *R/nhanes_mod.R
 a26ec69a3bde1b1c50a6eb959972a42d *R/nhanes_sub.R
@@ -27,9 +27,10 @@ ed448184a3807c97bdb7f6d2a0b2c167 *build/vignette.rds
 f857c5a475bab59f3f48ebf4f344c3fd *data/nhanes_imp.rda
 71e66de326ea61a0dab5d4ec3401ae15 *data/nhanes_mod.rda
 c7e9dd4e38f8a2b46925f4fb1f65b677 *data/nhanes_sub.rda
+7fbe3b6af837d8180da9f5a29fe915ce *inst/CITATION
 22b1386b62420a684805fcecccb51baf *inst/doc/myvignette.R
 67700729ceb1a31bb7e0450469ae3c6e *inst/doc/myvignette.Rmd
-6cd1c15247fbb9ca92c8094ce082a267 *inst/doc/myvignette.html
+0e930ad1d65a979c0624030654ad666f *inst/doc/myvignette.html
 eb82b66cf4578e835763089360c90958 *man/Gcsemv.Rd
 6c04fc9add96be332e27b4bb23fea0f4 *man/Mode.Rd
 0fc82d367803a3e6edac40f5e6ed2997 *man/as.data.frame.interval.Rd
@@ -49,7 +50,7 @@ b37c09a0eec3433225272a5493917570 *man/doubleintegral.Rd
 117890e95fc7ec397941e930cc693ae0 *man/generate_interval.Rd
 4dbaef8c456961e1f20e2e0b8bd7497c *man/get_type.Rd
 ff2ffefe9e806ded00e0fc4e5edb6f28 *man/head.interval.Rd
-562d0d9d0d70723bf0dcdb300b5a26b6 *man/hmi.Rd
+6a3ad62e7b1d0dedaf8183b5ce0817c0 *man/hmi.Rd
 164ea075a3d70ebdb6e68a1d680e959d *man/hmi_pool.Rd
 8e3145913791b638a641a48c1a6e3fdc *man/idf2interval.Rd
 c196807c15ae42d9a6408a591f6c1939 *man/imp_binary_multi.Rd

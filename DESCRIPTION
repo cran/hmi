@@ -1,7 +1,7 @@
 Package: hmi
 Type: Package
 Title: Hierarchical Multiple Imputation
-Version: 0.9.20
+Version: 1.0.0
 Authors@R: c(
     person("Matthias", "Speidel", , "matthias.speidel@googlemail.com", role = c("aut", "cre"),
     comment = "Munich, Germany"),
@@ -10,7 +10,7 @@ Authors@R: c(
     person("Shahab", "Jolani", role = "aut",
     comment = "Maastricht University, Maastricht, The Netherlands"))
 Maintainer: Matthias Speidel <matthias.speidel@googlemail.com>
-Description: Runs single level and multilevel imputation models. The user just has to pass the data to the main function and, optionally, his analysis model. Basically the package then translates this analysis model into commands to impute the data according to it with functions from 'mice', 'MCMCglmm' or routines build for this package.
+Description: Runs single level and multilevel imputation models as described in Speidel, Drechsler and Jolani (2020) <doi:10.18637/jss.v095.i09>. The user just has to pass the data to the main function and, optionally, his analysis model. Basically the package then translates this analysis model into commands to impute the data according to it with functions from 'mice', 'MCMCglmm' or routines build for this package.
 BugReports: https://github.com/matthiasspeidel/hmi/issues
 Imports: boot (>= 1.3-20), broom.mixed (>= 0.2.6), coda (>= 0.19-1),
         graphics (>= 3.0.0), linLIR (>= 1.1), lme4 (>= 1.1-15), MASS
@@ -28,11 +28,11 @@ RoxygenNote: 7.1.0
 VignetteBuilder: knitr
 URL: https://github.com/matthiasspeidel/hmi
 NeedsCompilation: no
-Packaged: 2020-09-17 16:45:19 UTC; Matthias
+Packaged: 2020-10-01 17:51:49 UTC; Matthias
 Author: Matthias Speidel [aut, cre] (Munich, Germany),
   Joerg Drechsler [aut] (Institute for Employment Research, Nuremberg,
     Germany),
   Shahab Jolani [aut] (Maastricht University, Maastricht, The
     Netherlands)
 Repository: CRAN
-Date/Publication: 2020-09-17 17:30:03 UTC
+Date/Publication: 2020-10-01 23:20:02 UTC
